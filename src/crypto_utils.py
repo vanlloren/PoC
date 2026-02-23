@@ -4,6 +4,17 @@ from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.asymmetric import utils
 import hashlib
 
+# Generates a Schnorr group with specified parameters
+def generate_schnorr_group():
+    # Generating a Schnorr group with p=3072bits, q=256bits, and g as a generator
+    print("Generating Schnorr group parameters...")
+    parameters = dsa.generate_parameters(key_size=3072)
+    p = parameters.parameter_numbers().p
+    q = parameters.parameter_numbers().q
+    g = parameters.parameter_numbers().g
+
+    return p, q, g
+
 # Returns a SHA256 hash of the message combined with the nonce, truncated to 128 bits for security
 # Takes as parameters a 3072-bit nonce, a message, and the group order q, and returns an integer hash value modulo q
 def hash_message(nonce, message, q):
@@ -24,22 +35,6 @@ def hash_message(nonce, message, q):
     hash_int = int.from_bytes(truncated_hash, byteorder='big')
     hash_int = hash_int % q
     return hash_int
-
-# Generates a Schnorr group with specified parameters
-def generate_schnorr_group():
-    # Generating a Schnorr group with p=3072bits, q=256bits, and g as a generator
-    print("Generating Schnorr group parameters...")
-    parameters = dsa.generate_parameters(key_size=3072)
-    p = parameters.parameter_numbers().p
-    q = parameters.parameter_numbers().q
-    g = parameters.parameter_numbers().g
-
-    print("Parameters generated:")
-    print(f"p = {p}")
-    print(f"q = {q}")
-    print(f"g = {g}")
-
-    return p, q, g
 
 # Generates an RSA key pair for the recovery party
 def generate_rsa_keypair():
