@@ -3,6 +3,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa, dsa
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.asymmetric import utils
 import hashlib
+import secrets
 
 # Generates a Schnorr group with specified parameters
 def generate_schnorr_group():
@@ -15,13 +16,22 @@ def generate_schnorr_group():
 
     return p, q, g
 
-# Returns a SHA256 hash of the message combined with the nonce, truncated to 128 bits for security
+# Returns a SHA256 hash of the message combined with the nonce (r), truncated to 128 bits for security
 # Takes as parameters a 3072-bit nonce, a message, and the group order q, and returns an integer hash value modulo q
 def hash_message(nonce, message, q):
-    # Encoding the nonce and message to bytes
+    # Encoding the nonce and message to bytes if not too long
+    if nonce.bit_length() > 3072:
+        raise ValueError("Nonce is too long (must be at most 3072 bits)")
     nonce_bytes = nonce.to_bytes(384, byteorder='big') #3072 bits = 384 bytes
-    message_bytes = message.encode('utf-8') if isinstance(message, str) else message
-    
+    if isinstance(message, str):
+        message_bytes = message.encode('utf-8')
+    elif isinstance(message, int):
+        message_bytes = message.to_bytes((message.bit_length() + 7) // 8, byteorder='big')
+    elif isinstance(message, bytes):
+        message_bytes = message
+    else:
+        raise ValueError("Unsupported message type. Must be str, int, or bytes.")
+        
     # Concatenate nonce and message bytes
     combined = nonce_bytes + message_bytes
     
@@ -49,7 +59,15 @@ def generate_rsa_keypair():
 # RSA-OAEP grants IND-CPA security
 # Can encrypt messages of length 256 bits
 def encrypt_with_public_key(public_key, plaintext):
-    # Convert the plaintext integer to bytes
+    # Convert the plaintext integer to bytes if representable in 256 bits
+    if not isinstance(plaintext, int):
+        raise ValueError("Plaintext must be an integer")
+    if plaintext < 0:
+        raise ValueError("Negative integers cannot be encrypted")
+    if plaintext.bit_length() > 256:
+        raise ValueError("Message too large for encryption (must be at most 256 bits)")
+    
+    
     plaintext_bytes = plaintext.to_bytes(32, byteorder='big')
 
     ciphertext = public_key.encrypt(
@@ -80,30 +98,32 @@ def decrypt_with_private_key(private_key, ciphertext):
     return int.from_bytes(plaintext, byteorder='big')
 
 # Generates Commitment and Decommitment for a given value
-# Takes as parameter one value and returns a commitment and decommitment
-def commit_single(value1):
+# Takes as parameter one value and the group order q, and returns a commitment and decommitment
+def commit_single(value1, q):
     # Select a random nonce for the commitment
-    nonce = os.urandom(32)  # 256-bit random nonce
+    nonce = secrets.randbelow(q)  # random nonce in the range 0 to q-1
+    nonce_bytes = nonce.to_bytes(32, byteorder='big') # Convert the nonce to 256bits
 
     # Convert the value to 384 bytes
     value_bytes = value1.to_bytes(384, byteorder='big')
 
-    hash_input = value_bytes + nonce
+    hash_input = value_bytes + nonce_bytes
     commitment = hashlib.sha256(hash_input).digest()    
 
     return commitment, (value1, nonce)
 
 # Generates Commitment and Decommitment for two values
-# Takes as parameters two values and returns a commitment and decommitment
-def commit_couple(value1, value2):
+# Takes as parameters two values and the group order q, and returns a commitment and decommitment
+def commit_couple(value1, value2, q):
     # Select a random nonce for the commitment
-    nonce = os.urandom(32)  # 256-bit random nonce
+    nonce = secrets.randbelow(q)  # random nonce in the range 0 to q-1 
+    nonce_bytes = nonce.to_bytes(32, byteorder='big') # Convert the nonce to 256bits
 
     # Convert the values to 384 bytes each
     value1_bytes = value1.to_bytes(384, byteorder='big')
     value2_bytes = value2.to_bytes(384, byteorder='big')
 
-    hash_input = value1_bytes + value2_bytes + nonce
+    hash_input = value1_bytes + value2_bytes + nonce_bytes
     commitment = hashlib.sha256(hash_input).digest()    
 
     return commitment, (value1, value2, nonce)
@@ -113,12 +133,14 @@ def verify_commitment(commitment, decommitment):
     if len(decommitment) == 2:
         value1, nonce = decommitment
         value_bytes = value1.to_bytes(384, byteorder='big')
-        hash_input = value_bytes + nonce
+        nonce_bytes = nonce.to_bytes(32, byteorder='big')
+        hash_input = value_bytes + nonce_bytes
     elif len(decommitment) == 3:
         value1, value2, nonce = decommitment
         value1_bytes = value1.to_bytes(384, byteorder='big')
         value2_bytes = value2.to_bytes(384, byteorder='big')
-        hash_input = value1_bytes + value2_bytes + nonce
+        nonce_bytes = nonce.to_bytes(32, byteorder='big')
+        hash_input = value1_bytes + value2_bytes + nonce_bytes
     else:
         raise ValueError("Invalid decommitment format")
 
