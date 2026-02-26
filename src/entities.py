@@ -5,6 +5,7 @@ import src.general_procedures
 import threading
 import secrets
 import queue
+from src.general_procedures import abort
 
 # The offline RecoveryParty
 class RecoveryParty(threading.Thread):
@@ -12,12 +13,15 @@ class RecoveryParty(threading.Thread):
     def __init__(self):
         super().__init__()
         self.enc_private_key, self.enc_public_key = src.crypto_utils.generate_rsa_keypair()
+        self.running = True
+        self.exceptionQueue = None
 
     # To set the communication queues with the users
-    def set_communication_queues(self, queue1, queue2, queue3): 
+    def set_communication_queues(self, queue1, queue2, queue3, exceptionQueue): 
         self.queue1 = queue1
         self.queue2 = queue2
         self.queue3 = queue3
+        self.exceptionQueue = exceptionQueue
 
     # Sets the group parameters for the recovery party
     def set_group_parameters(self, p, q, g):
@@ -29,6 +33,13 @@ class RecoveryParty(threading.Thread):
     def share_encryption_public_key(self, UserList):
         for user in UserList:
             user.receive_recovery_public_key(self.enc_public_key)
+
+    def run(self):
+        while self.running:
+            try:
+                msg = self.queue3.get(timeout=10)  # Wait for a message from the users
+            except queue.Empty:
+                pass
         
 
     # Activates the recovery signature process in P3
@@ -68,12 +79,15 @@ class User1(threading.Thread):
         self.party_id = party_id
         self.recovery_public_key = None
         self.running = True
+        self.keygen_completed = threading.Event()
+        self.exceptionQueue = None
 
     # Sets the communication queues with the other user and the recovery party
-    def set_communication_queues(self, queue1, queue2, queue3):
+    def set_communication_queues(self, queue1, queue2, queue3, exceptionQueue):
         self.queue1 = queue1
         self.queue2 = queue2
         self.queue3 = queue3
+        self.exceptionQueue = exceptionQueue
 
     # Receives the recovery party's encryption public key
     def receive_recovery_public_key(self, enc_public_key):
@@ -90,7 +104,13 @@ class User1(threading.Thread):
         while self.running:
             try:
                 msg = self.queue1.get(timeout=10)  # Wait for a message from the other user or the recovery party
-                processMessage(msg)  # Process the message and continue the protocol
+                self.processMessage(msg)  # Process the message and continue the protocol
+            except src.utils.ProtocolAbortedException as e:
+                self.aborted = True
+                self.running = False
+                self.keygen_completed.set()
+                self.exceptionQueue.put(e)  # Put the exception in the exceptionQueue to communicate it to the main thread
+                raise
             except queue.Empty:
                 pass
     
@@ -112,9 +132,9 @@ class User1(threading.Thread):
 
     # First phase of key generation
     def keygen_1(self):
-        self.a_1 = secrets.randbelow(self.q) 
-        self.y_3_1 = secrets.randbelow(self.q)
-        self.m_1 = secrets.randbelow(self.q)
+        self.a_1 = secrets.randbelow(self.q - 1) + 1  # a_1 must be different from 0 to avoid A_1=1
+        self.y_3_1 = secrets.randbelow(self.q - 1) + 1  # y_3_1 must be different from 0 to avoid Y_3_1=1
+        self.m_1 = secrets.randbelow(self.q - 1) + 1  # m_1 must be different from 0 to avoid M_1=1
 
         self.A_1 = pow(self.g, self.a_1, self.p)
         self.Y_3_1 = pow(self.g, self.y_3_1, self.p)
@@ -124,13 +144,13 @@ class User1(threading.Thread):
         self.A_Y_decommitment = A_Y_decommitment
 
         # Send the commitment to the other user
-        self.queue2.put(Message(description="A_Y_commitment", sender=self.party_id, receiver=2, content=A_Y_commitment))
+        self.queue2.put(src.utils.Message(description="A_Y_commitment", sender=self.party_id, receiver=2, content=A_Y_commitment))
         
     # Second phase of key generation
     def keygen_2(self, commitment):
         self.A_Y_other_commitment = commitment
         # Send the decommitment to the other user
-        self.queue2.put(Message(description="A_Y_decommitment", sender=self.party_id, receiver=2, content=self.A_Y_decommitment))
+        self.queue2.put(src.utils.Message(description="A_Y_decommitment", sender=self.party_id, receiver=2, content=self.A_Y_decommitment))
         
     # Third phase of key generation
     def keygen_3(self, decommitment):
@@ -154,7 +174,7 @@ class User1(threading.Thread):
 
         # Publish M_1 to the other user
         M_1 = pow(self.g, self.m_1, self.p)
-        self.queue2.put(Message(description="M_1", sender=self.party_id, receiver=2, content=M_1))
+        self.queue2.put(src.utils.Message(description="M_1", sender=self.party_id, receiver=2, content=M_1))
 
         # Encrypt y_1_3 and y_3_1 with public key
         enc_y_1_3 = src.crypto_utils.encrypt_with_public_key(self.recovery_public_key, self.y_1_3)
@@ -164,13 +184,13 @@ class User1(threading.Thread):
 
         # Send y_1_j and rec_1_3 to the other user
         # MISSING TODO: Add NIZKP
-        self.queue2.put(Message(description="rec_info", sender=self.party_id, receiver=2, content=(self.y_1_2, self.rec_1_3)))
+        self.queue2.put(src.utils.Message(description="rec_info", sender=self.party_id, receiver=2, content=(self.y_1_2, self.rec_1_3)))
         
     # Fifth phase of key generation
     def keygen_5(self):
         # MISSING TODO: Check NIZKP
 
-        if pow(self.g, self.y_2_1, self.p) != self.A_Y_other_decommitment[0] * pow(self.g, self.M_2 * 1, self.p) % self.p:
+        if pow(self.g, self.y_2_1, self.p) != self.A_Y_other_decommitment[0] * pow(self.M_2, 1, self.p) % self.p:
             src.general_procedures.abort()        
 
         # Generate x_1
@@ -181,18 +201,30 @@ class User1(threading.Thread):
 
         # Compute public key A
         self.A_3 = pow(self.Y_3_1, 2, self.p) * pow(self.A_Y_other_decommitment[1], -1, self.p) % self.p
-        A = (self.A_1 * self.A_Y_other_decommitment[0] * self.A_3) % self.p
+        self.A = (self.A_1 * self.A_Y_other_decommitment[0] * self.A_3) % self.p
 
         # Compute omega_1
         self.omega_1 = (2 * self.x_1) % self.q
+
+        self.keygen_completed.set()
           
 # The user2 class
 class User2(threading.Thread):
     # Creates a user with a unique party ID (2) and initializes the recovery public key to None
     def __init__(self, party_id):
+        super().__init__()
         self.party_id = party_id
         self.recovery_public_key = None
         self.running = True
+        self.keygen_completed = threading.Event()
+        self.exceptionQueue = None
+
+    def set_communication_queues(self, queue1, queue2, queue3, exceptionQueue):
+        self.queue1 = queue1
+        self.queue2 = queue2
+        self.queue3 = queue3
+        self.exceptionQueue = exceptionQueue
+
 
     # Receives the recovery party's encryption public key
     def receive_recovery_public_key(self, enc_public_key):
@@ -209,7 +241,13 @@ class User2(threading.Thread):
         while self.running:
             try:
                 msg = self.queue2.get(timeout=10)  # Wait for a message from the other user or the recovery party
-                processMessage(msg)  # Process the message and continue the protocol
+                self.processMessage(msg)  # Process the message and continue the protocol
+            except src.utils.ProtocolAbortedException as e:
+                self.aborted = True
+                self.running = False
+                self.keygen_completed.set()
+                self.exceptionQueue.put(e)  # Put the exception in the exceptionQueue to communicate it to the main thread
+                raise
             except queue.Empty:
                 pass
 
@@ -231,9 +269,9 @@ class User2(threading.Thread):
         
     # First phase of key generation
     def keygen_1(self):  
-        self.a_2 = secrets.randbelow(self.q) 
-        self.y_3_2 = secrets.randbelow(self.q)
-        self.m_2 = secrets.randbelow(self.q)
+        self.a_2 = secrets.randbelow(self.q - 1) + 1  # a_2 must be different from 0 to avoid A_2=1
+        self.y_3_2 = secrets.randbelow(self.q - 1) + 1 # y_3_2 must be different from 0 to avoid Y_3_2=1
+        self.m_2 = secrets.randbelow(self.q - 1) + 1  # m_2 must be different from 0 to avoid M_2=1
 
         self.A_2 = pow(self.g, self.a_2, self.p)
         self.Y_3_2 = pow(self.g, self.y_3_2, self.p)
@@ -243,13 +281,13 @@ class User2(threading.Thread):
         self.A_Y_decommitment = A_Y_decommitment
 
         # Send the commitment to the other user
-        self.queue1.put(Message(description="A_Y_commitment", sender=self.party_id, receiver=1, content=A_Y_commitment))
+        self.queue1.put(src.utils.Message(description="A_Y_commitment", sender=self.party_id, receiver=1, content=A_Y_commitment))
         
     # Second phase of key generation
     def keygen_2(self, commitment):
         self.A_Y_other_commitment = commitment
         # Send the decommitment to the other user
-        self.queue1.put(Message(description="A_Y_decommitment", sender=self.party_id, receiver=1, content=self.A_Y_decommitment))
+        self.queue1.put(src.utils.Message(description="A_Y_decommitment", sender=self.party_id, receiver=1, content=self.A_Y_decommitment))
 
     # Third phase of key generation
     def keygen_3(self, decommitment):
@@ -257,12 +295,12 @@ class User2(threading.Thread):
         # Verify the commitment received from the other user
         if not src.crypto_utils.verify_commitment(self.A_Y_other_commitment, decommitment):
             # The protocol aborts
-            general_procedures.abort()
+            src.general_procedures.abort()
         else:
             self.keygen_4()
 
     # Fourth phase of key generation
-    def keygen_4(self, other_user):
+    def keygen_4(self):
         # Create polinomial f_2 = a_2 + m_2*X
         f_2 = lambda X: (self.a_2 + self.m_2 * X) % self.q  
 
@@ -274,7 +312,7 @@ class User2(threading.Thread):
 
         # Publish M_2 to the other user
         M_2 = pow(self.g, self.m_2, self.p)
-        self.queue1.put(Message(description="M_2", sender=self.party_id, receiver=1, content=M_2))
+        self.queue1.put(src.utils.Message(description="M_2", sender=self.party_id, receiver=1, content=M_2))
 
         # Encrypt y_2_3 and y_3_2 with public key
         enc_y_2_3 = src.crypto_utils.encrypt_with_public_key(self.recovery_public_key, self.y_2_3)
@@ -284,13 +322,13 @@ class User2(threading.Thread):
 
         # Send y_2_1 and rec_2_3 to the other user
         # MISSING TODO: Add NIZKP
-        self.queue1.put(Message(description="rec_info", sender=self.party_id, receiver=1, content=(self.y_2_1, self.rec_2_3)))
+        self.queue1.put(src.utils.Message(description="rec_info", sender=self.party_id, receiver=1, content=(self.y_2_1, self.rec_2_3)))
         
     # Fifth phase of key generation
-    def keygen_5(self, other_user):
+    def keygen_5(self):
         # MISSING TODO: Check NIZKP
 
-        if pow(self.g, self.y_1_2, self.p) != self.A_Y_other_decommitment[0] * pow(self.g, self.M_1 * 2, self.p) % self.p:
+        if pow(self.g, self.y_1_2, self.p) != self.A_Y_other_decommitment[0] * pow(self.M_1, 2, self.p) % self.p:
             src.general_procedures.abort()        
 
         # Generate x_2
@@ -300,8 +338,10 @@ class User2(threading.Thread):
         # TODO: Add ZKP
 
         # Compute public key A
-        self.A_3 = pow(self.A_Y_other_decommitment[0], 2, self.p) * pow(self.Y_3_2, -1, self.p) % self.p
-        A = (self.A_2 * self.A_Y_other_decommitment[0] * self.A_3) % self.p
+        self.A_3 = pow(self.A_Y_other_decommitment[1], 2, self.p) * pow(self.Y_3_2, -1, self.p) % self.p
+        self.A = (self.A_2 * self.A_Y_other_decommitment[0] * self.A_3) % self.p
 
         # Compute omega_2
         self.omega_2 = (-self.x_2) % self.q
+
+        self.keygen_completed.set()
