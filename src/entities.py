@@ -124,6 +124,9 @@ class User1(threading.Thread):
             self.keygen_3(msg.content)
         if msg.description == "M_2" and msg.sender == 2:
             self.M_2 = msg.content
+            if self.M_2 == 1:
+                # The protocol aborts if M_2=1, since it would cause problems in the following computations
+                src.general_procedures.abort()
         if msg.description == "rec_info" and msg.sender == 2:
             y_2_1, rec_2_3 = msg.content
             self.y_2_1 = y_2_1
@@ -160,6 +163,9 @@ class User1(threading.Thread):
             # The protocol aborts
             src.general_procedures.abort()
         else:
+            if self.A_Y_other_decommitment[0] == 1 or self.A_Y_other_decommitment[1] == 1:
+                # The protocol aborts if A_2=1 or Y_3_2=1, since it would cause problems in the following computations
+                src.general_procedures.abort()
             self.keygen_4()
 
     # Fourth phase of key generation
@@ -261,6 +267,9 @@ class User2(threading.Thread):
             self.keygen_3(msg.content)
         if msg.description == "M_1" and msg.sender == 1:
             self.M_1 = msg.content
+            if self.M_1 == 1:
+                # The protocol aborts if M_1=1, since it would cause problems in the following computations
+                src.general_procedures.abort()
         if msg.description == "rec_info" and msg.sender == 1:
             y_1_2, rec_1_3 = msg.content
             self.y_1_2 = y_1_2
@@ -297,6 +306,9 @@ class User2(threading.Thread):
             # The protocol aborts
             src.general_procedures.abort()
         else:
+            if self.A_Y_other_decommitment[0] == 1 or self.A_Y_other_decommitment[1] == 1:
+                # The protocol aborts if A_1=1 or Y_3_1=1, since it would cause problems in the following computations
+                src.general_procedures.abort()
             self.keygen_4()
 
     # Fourth phase of key generation
