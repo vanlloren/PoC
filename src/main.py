@@ -31,15 +31,25 @@ def main():
 
         # Now simulation of an ordinary signature
         src.general_procedures.sign(user1, user2, "This is a message to be signed.", failedSignatureExceptionQueue, abortExceptionQueue)
-        
+        try:
+            # Check if any of the threads has put an exception in the failedSignatureExceptionQueue
+            exc, guilty = failedSignatureExceptionQueue.get_nowait()
+            raise exc
+        except queue.Empty:
+            pass
+
         # Another signature, to show that the protocol can be used multiple times with the same keys
         src.general_procedures.sign(user1, user2, "This is another message to be signed.", failedSignatureExceptionQueue, abortExceptionQueue)
+        try:
+            # Check if any of the threads has put an exception in the abortExceptionQueue
+            exc = abortExceptionQueue.get_nowait()
+            raise exc
+        except queue.Empty:
+            pass
 
     except ProtocolAbortedException as e:
         raise e
         print(f"Main: protocollo abortito - {e}")
-    except Exception as e:
-        print(f"Main: errore inaspettato - {e}")
     finally:
         # Alla fine di tutto, fermiamo i thread dei party
         #recovery.running = False

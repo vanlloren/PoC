@@ -71,6 +71,9 @@ def sign(user1, user2, msg, failedSignatureExceptionQueue, abortExceptionQueue):
         try: 
             # Check if any of the threads has put a SignatureException in the failedSignatureExceptionQueue
             exc, guilty = failedSignatureExceptionQueue.get_nowait() # will return a couple (exception, guilty_party_id)
+
+            # Readd the exception in the queue to be caught in main function
+            failedSignatureExceptionQueue.put((exc, guilty))
             raise exc
         except queue.Empty:
             pass
