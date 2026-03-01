@@ -11,4 +11,7 @@ class Message:
 
 class ProtocolAbortedException(Exception):
     pass
+
+class SignatureException(Exception):
+    pass
     
