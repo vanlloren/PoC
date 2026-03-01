@@ -17,7 +17,7 @@ def test_keygen_working():
 # This test checks if the two users compute the same value of A
 def test_keygen_correct_publickey_generation():
     try:
-        recovery, user1, user2, exceptionQueue = src.general_procedures.initialize_protocol()
+        recovery, user1, user2, exceptionQueue, failedSignatureExceptionQueue = src.general_procedures.initialize_protocol()
         success = src.general_procedures.begin_keygen_protocol(user1, user2)
 
         try:
@@ -55,7 +55,7 @@ def test_keygen_correct_publickey_generation():
 # This test checks the correctness of other values in key generation phase
 def test_keygen_correctness_of_other_values():
     try:
-        recovery, user1, user2, exceptionQueue = src.general_procedures.initialize_protocol()
+        recovery, user1, user2, exceptionQueue, failedSignatureExceptionQueue = src.general_procedures.initialize_protocol()
         success = src.general_procedures.begin_keygen_protocol(user1, user2)
 
         try:
