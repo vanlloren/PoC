@@ -6,13 +6,15 @@ import threading
 import time
 import queue
 import src.utils
+from src.utils import ProtocolAbortedException, SignatureException
 
 def initialize_protocol():
     # Create queues for communication between the parties
     queue1 = queue.Queue()  # User1
     queue2 = queue.Queue()  # User2
     queue3 = queue.Queue()  # Recovery Party
-    exceptionQueue = queue.Queue()  # To communicate exceptions from threads to the main thread
+    abortExceptionQueue = queue.Queue()  # To communicate abort exceptions from threads to the main thread
+    failedSignatureExceptionQueue = queue.Queue()  # To communicate signature exceptions from threads to general procedures
 
     # Initialize the recovery party and the users
     recovery_party = src.entities.RecoveryParty()
@@ -20,9 +22,9 @@ def initialize_protocol():
     user2 = src.entities.User2(party_id=2)
 
     # Send the queues to the users and the recovery party
-    user1.set_communication_queues(queue1, queue2, queue3, exceptionQueue)
-    user2.set_communication_queues(queue1, queue2, queue3, exceptionQueue)
-    recovery_party.set_communication_queues(queue1, queue2, queue3, exceptionQueue)
+    user1.set_communication_queues(queue1, queue2, queue3, abortExceptionQueue, failedSignatureExceptionQueue)
+    user2.set_communication_queues(queue1, queue2, queue3, abortExceptionQueue, failedSignatureExceptionQueue)
+    recovery_party.set_communication_queues(queue1, queue2, queue3, abortExceptionQueue)
 
     # Generate group parameters (p, q, g) for the protocol
     p, q, g = src.crypto_utils.generate_schnorr_group()
@@ -39,11 +41,15 @@ def initialize_protocol():
     user1.start()
     user2.start()
 
-    return recovery_party, user1, user2, exceptionQueue
+    return recovery_party, user1, user2, abortExceptionQueue, failedSignatureExceptionQueue
 
 # This function aborts the protocol 
 def abort():
     raise src.utils.ProtocolAbortedException("Protocol aborted due to an error or malicious behavior.")
+
+# This function raises a SignatureException
+def raise_signature_exception(guilty_party_id):
+    raise src.utils.SignatureException(f"Signature generation failed due to malicious behavior of user{guilty_party_id}.")
 
 # This function simulates the key generation protocol between two users
 def begin_keygen_protocol(user1, user2):
@@ -56,6 +62,54 @@ def begin_keygen_protocol(user1, user2):
     success1 = user1.keygen_completed.wait(timeout)
     success2 = user2.keygen_completed.wait(timeout)
     
-    
-    
+    return success1 and success2
+
+def sign(user1, user2, msg, failedSignatureExceptionQueue, abortExceptionQueue):
+    try:
+        success = src.general_procedures.begin_signature_protocol(user1, user2, msg)
+
+        try: 
+            # Check if any of the threads has put a SignatureException in the failedSignatureExceptionQueue
+            exc, guilty = failedSignatureExceptionQueue.get_nowait() # will return a couple (exception, guilty_party_id)
+            raise exc
+        except queue.Empty:
+            pass
+
+        try:
+            # Check if any of the threads has put an exception in the abortExceptionQueue
+            exc = abortExceptionQueue.get_nowait()
+            raise exc
+        except queue.Empty:
+            pass
+
+        if success and user1.signature == user2.signature:
+            print("Signature generation completed successfully!")
+            # Print the signature (S, E) for the message
+            print("Signature: ", user1.signature)
+        else:            
+            print("Signature generation failed!")
+
+    except SignatureException as e:
+        # Stampa messaggio di errore che indica il colpevole (user1 o user2) e l'eccezione di firma
+        print(f"Main: eccezione di firma - colpevole: user{guilty}, eccezione: {e}")
+        print("Main: suggerimento - eseguire il protocollo di firma di recupero per generare una firma valida per il messaggio.")
+
+# This function simulates the ordinary signature generation protocol between two users
+def begin_signature_protocol(user1, user2, msg):
+    # Send to user1 and user2 the message to start the signature generation protocol
+    message = src.utils.Message(description="start_signature", sender=0, receiver=0, content=msg)
+    user1.queue1.put(message)
+    user2.queue2.put(message)
+
+    # if one of the users does not/cannot participate, a SignatureException is insterted in the
+    # failedSignatureExceptionQueue, which will be caught in the main function, and the protocol will suggest to perform 
+    # a recovery signature
+
+    timeout = 10  # secondi
+    success1 = user1.signature_completed.wait(timeout)
+    success2 = user2.signature_completed.wait(timeout)
+
+    user1.signature_completed.clear()  # Reset the event for the next signature
+    user2.signature_completed.clear()  # Reset the event for the next signature
+
     return success1 and success2
