@@ -267,7 +267,7 @@ class User1(threading.Thread):
             # The protocol aborts
             src.general_procedures.abort()
         else:
-            if self.other_R_decommitment == 1:
+            if self.other_R_decommitment[0] == 1:
                 # The protocol aborts if R_2=1 or R_3=1, since it would cause problems in the following computations
                 src.general_procedures.abort()
             self.signature_3_part2()
@@ -514,7 +514,7 @@ class User2(threading.Thread):
             # The protocol aborts
             src.general_procedures.abort()
         else:
-            if self.other_R_decommitment == 1:
+            if self.other_R_decommitment[0] == 1:
                 # The protocol aborts if R_1=1, since it would cause problems in the following computations
                 src.general_procedures.abort()
             self.signature_3_part2()
