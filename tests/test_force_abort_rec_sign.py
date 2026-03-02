@@ -46,10 +46,10 @@ def test_signature_validity_fail():
 def test_combine_commitment_verification_fail():
     def mock_combine_rec(self, other_s_decommitment):
         self.other_s_decommitment = other_s_decommitment
-        # Add 1 to the commitment to fail the verification
-        self.other_s_commitment = (self.other_s_commitment + 1) % self.q
+        # Add 1 to the decommitment to fail the verification
+        self.other_s_decommitment = (self.other_s_decommitment[0] + 1, self.other_s_decommitment[1])
         # Verify the commitment received from the other user
-        if not src.crypto_utils.verify_commitment(self.other_s_commitment, other_s_decommitment):
+        if not src.crypto_utils.verify_commitment(self.other_s_commitment, self.other_s_decommitment):
             # The protocol aborts
             src.general_procedures.abort()
         else:
