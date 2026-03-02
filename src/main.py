@@ -42,7 +42,25 @@ def main():
         src.general_procedures.sign(user1, user2, "This is another message to be signed.", failedSignatureExceptionQueue, abortExceptionQueue)
         try:
             # Check if any of the threads has put an exception in the abortExceptionQueue
-            exc = abortExceptionQueue.get_nowait()
+            exc, guilty = failedSignatureExceptionQueue.get_nowait()
+            raise exc
+        except queue.Empty:
+            pass
+
+        # Perform a recovery signature, for example if user2 has lost his keys
+        src.general_procedures.recoverySign(user1, recovery, "Sign this message", failedSignatureExceptionQueue, abortExceptionQueue)
+        try:
+            # Check if any of the threads has put an exception in the abortExceptionQueue
+            exc, guilty = failedSignatureExceptionQueue.get_nowait()
+            raise exc
+        except queue.Empty:
+            pass
+
+        # Another recovery, this time user1 has lost his keys
+        src.general_procedures.recoverySign(user2, recovery, "Sign this message", failedSignatureExceptionQueue, abortExceptionQueue)
+        try:
+            # Check if any of the threads has put an exception in the abortExceptionQueue
+            exc, guilty = failedSignatureExceptionQueue.get_nowait()
             raise exc
         except queue.Empty:
             pass
