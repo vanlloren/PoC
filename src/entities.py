@@ -16,13 +16,14 @@ class RecoveryParty(threading.Thread):
         self.running = True
         self.exceptionQueue = None
         self.party_id = 3  # The recovery party has a fixed party ID of 3
+        self.signature_completed = threading.Event()
 
     # To set the communication queues with the users
-    def set_communication_queues(self, queue1, queue2, queue3, exceptionQueue): 
+    def set_communication_queues(self, queue1, queue2, queue3, abortExceptionQueue): 
         self.queue1 = queue1
         self.queue2 = queue2
         self.queue3 = queue3
-        self.exceptionQueue = exceptionQueue
+        self.abortExceptionQueue = abortExceptionQueue
 
     # Sets the group parameters for the recovery party
     def set_group_parameters(self, p, q, g):
@@ -39,13 +40,36 @@ class RecoveryParty(threading.Thread):
         while self.running:
             try:
                 msg = self.queue3.get(timeout=10)  # Wait for a message from the users
+                self.processMessage(msg)  # Process the message and continue the protocol
+            except src.utils.ProtocolAbortedException as e:
+                self.aborted = True
+                self.running = False
+                self.abortExceptionQueue.put(e)  # Put the exception in the abortExceptionQueue to communicate it to the main thread
+                raise
             except queue.Empty:
                 pass
-        
+
+    # Message processing
+    def processMessage(self, msg):
+        if msg.description == "wakeup" and msg.sender in [1,2]:
+            self.wakeup(msg.content[0], msg.sender, msg.content[1], msg.content[2], msg.content[3])
+        if (msg.description == "R_1_commitment" and msg.sender == 1) or (msg.description == "R_2_commitment" and msg.sender == 2):
+            self.signature_2(msg.content)
+        if (msg.description == "R_1_decommitment" and msg.sender == 1) or (msg.description == "R_2_decommitment" and msg.sender == 2):
+            self.signature_3(msg.content)
+        if (msg.description == "s_1_commitment" and msg.sender == 1) or (msg.description == "s_2_commitment" and msg.sender == 2):
+            self.signature_4(msg.content)
+        if (msg.description == "s_1_decommitment" and msg.sender == 1) or (msg.description == "s_2_decommitment" and msg.sender == 2):
+            self.combine(msg.content)        
+        if msg.description == "signature_fail" and msg.sender in [1,2]:
+            self.signature_completed.set()
 
     # Activates the recovery signature process in P3
-    def wakeup(self, message, user, enc_rec_1_3, enc_rec_2_3):
+    def wakeup(self, message, user, A, enc_rec_1_3, enc_rec_2_3):
         # Decompose the couples of encrypted values received from the user
+        self.A = A
+        self.message = message
+        self.curr_user = user
         enc_y_1_3, enc_y_3_1 = enc_rec_1_3
         enc_y_2_3, enc_y_3_2 = enc_rec_2_3
 
@@ -67,10 +91,116 @@ class RecoveryParty(threading.Thread):
         # TODO: Add ZKP to prove correct computation of x_3 without revealing it
 
         # Depending on the other party, compute omega_3
-        if user.party_id == 1:
+        if user == 1:
             self.omega_3 = - (x_3 // 2) % self.q
-        elif user.party_id == 2:
+        elif user == 2:
             self.omega_3 = - (2* x_3) % self.q
+
+        # Send a message to the user to start the recovery signature protocol
+        if user == 1:
+            message = src.utils.Message(description="start_signature", sender=self.party_id, receiver=1, content=self.message)
+            self.queue1.put(message)
+        elif user == 2:
+            message = src.utils.Message(description="start_signature", sender=self.party_id, receiver=2, content=self.message)
+            self.queue2.put(message)
+
+        self.signature_1()
+
+    # First phase of signature
+    def signature_1(self):
+         # Save the message to be signed
+        self.msg_to_sign = self.message
+
+        # Generate k_1
+        self.k_3 = secrets.randbelow(self.q - 1) + 1
+
+        # Compute R_1 = g^k_1 mod p
+        self.R_3 = pow(self.g, self.k_3, self.p)
+
+        # Compute the commitment for R_1
+        R_3_commitment, R_3_decommitment = src.crypto_utils.commit_single(self.R_3, self.q)
+        self.R_3_decommitment = R_3_decommitment
+
+        # Send the commitment to the other user
+        if self.curr_user == 2:
+            self.queue2.put(src.utils.Message(description="R_3_commitment", sender=self.party_id, receiver=2, content=R_3_commitment))
+        elif self.curr_user == 1:
+            self.queue1.put(src.utils.Message(description="R_3_commitment", sender=self.party_id, receiver=1, content=R_3_commitment))
+
+    # Second phase of signature protocol
+    def signature_2(self, other_R_commitment):
+        self.other_R_commitment = other_R_commitment
+        # Send the decommitment to the other user
+        if self.curr_user == 2:
+            self.queue2.put(src.utils.Message(description="R_3_decommitment", sender=self.party_id, receiver=2, content=self.R_3_decommitment))
+        elif self.curr_user == 1:
+            self.queue1.put(src.utils.Message(description="R_3_decommitment", sender=self.party_id, receiver=1, content=self.R_3_decommitment))
+    
+    # Third phase of signature protocol
+    def signature_3(self, other_R_decommitment):
+        self.other_R_decommitment = other_R_decommitment
+        # Verify the commitment received from the other user
+        if not src.crypto_utils.verify_commitment(self.other_R_commitment, self.other_R_decommitment):
+            # The protocol aborts
+            src.general_procedures.abort()
+        else:
+            if self.other_R_decommitment[0] == 1:
+                # The protocol aborts if R_2=1 or R_3=1, since it would cause problems in the following computations
+                src.general_procedures.abort()
+            self.signature_3_part2()
+
+    # Second part of third phase of signature protocol
+    def signature_3_part2(self):
+        # Compute R = R_3 * R_other mod p
+        self.R = (self.R_3 * self.other_R_decommitment[0]) % self.p
+
+        # If R=1 the protocol aborts, since it would cause problems in the following computations
+        if self.R == 1:
+            src.general_procedures.abort()
+
+        # Compute e = H(m || R) mod q
+        self.e = src.crypto_utils.hash_message(self.R, self.msg_to_sign, self.q) % self.q
+
+        # Compute s_3 = k_3 - e * omega_3 mod q
+        self.s_3 = (self.k_3 - self.e * self.omega_3) % self.q
+
+        # Compute the commitment for s_3
+        s_3_commitment, s_3_decommitment = src.crypto_utils.commit_single(self.s_3, self.q)
+        self.s_3_decommitment = s_3_decommitment
+
+        # Send the commitment to the other user
+        if self.curr_user == 2:
+            self.queue2.put(src.utils.Message(description="s_3_commitment", sender=self.party_id, receiver=2, content=s_3_commitment))
+        elif self.curr_user == 1:
+            self.queue1.put(src.utils.Message(description="s_3_commitment", sender=self.party_id, receiver=1, content=s_3_commitment))
+
+    # Fourth phase of signature protocol
+    def signature_4(self, other_s_commitment):
+        self.other_s_commitment = other_s_commitment
+        # Send s_3 decommitment to the other user
+        if self.curr_user == 2:
+            self.queue2.put(src.utils.Message(description="s_3_decommitment", sender=self.party_id, receiver=2, content=self.s_3_decommitment))
+        elif self.curr_user == 1:
+            self.queue1.put(src.utils.Message(description="s_3_decommitment", sender=self.party_id, receiver=1, content=self.s_3_decommitment))
+
+    # Fifth phase of signature protocol
+    def combine(self, other_s_decommitment):
+        self.other_s_decommitment = other_s_decommitment
+        # Verify the commitment received from the other user
+        if not src.crypto_utils.verify_commitment(self.other_s_commitment, other_s_decommitment):
+            # The protocol aborts
+            src.general_procedures.abort()
+        else:
+            self.s = (self.s_3 + self.other_s_decommitment[0]) % self.q
+            
+            # Verification
+            r_v = (pow(self.g, self.s, self.p) * pow(self.A, self.e, self.p)) % self.p
+            e_v = src.crypto_utils.hash_message(r_v, self.msg_to_sign, self.q) % self.q
+            if e_v != self.e:
+                src.general_procedures.abort()
+            else:
+                self.signature = (self.e, self.s)
+                self.signature_completed.set()
         
 # The user1 class
 class User1(threading.Thread):
@@ -84,6 +214,7 @@ class User1(threading.Thread):
         self.signature_completed = threading.Event()
         self.abortExceptionQueue = None
         self.failedSignatureExceptionQueue = None
+        self.recovery = False
 
     # Sets the communication queues with the other user and the recovery party
     def set_communication_queues(self, queue1, queue2, queue3, abortExceptionQueue, failedSignatureExceptionQueue):
@@ -128,7 +259,15 @@ class User1(threading.Thread):
         if msg.description == "start_keygen" and msg.sender == 0:
             self.keygen_1()
         if msg.description == "start_signature" and msg.sender == 0:
+            self.recovery = False
+            self.curr_user = 2
             self.signature_1(msg.content)
+        if msg.description == "start_signature" and msg.sender == 3:
+            self.recovery = True
+            self.curr_user = 3
+            self.signature_1(msg.content)
+        if msg.description == "start_recovery_signature" and msg.sender == 0:
+            self.recovery_signature_1(msg.content)
         if msg.description == "signature_fail" and msg.sender == 2:
             self.signature_completed.set()
         if msg.description == "A_Y_commitment" and msg.sender == 2:
@@ -251,13 +390,19 @@ class User1(threading.Thread):
         self.R_1_decommitment = R_1_decommitment
 
         # Send the commitment to the other user
-        self.queue2.put(src.utils.Message(description="R_1_commitment", sender=self.party_id, receiver=2, content=R_1_commitment))
+        if self.curr_user == 2:
+            self.queue2.put(src.utils.Message(description="R_1_commitment", sender=self.party_id, receiver=2, content=R_1_commitment))
+        elif self.curr_user == 3:
+            self.queue3.put(src.utils.Message(description="R_1_commitment", sender=self.party_id, receiver=3, content=R_1_commitment))
 
     # Second phase of signature protocol
     def signature_2(self, other_R_commitment):
         self.other_R_commitment = other_R_commitment
         # Send the decommitment to the other user
-        self.queue2.put(src.utils.Message(description="R_1_decommitment", sender=self.party_id, receiver=2, content=self.R_1_decommitment))
+        if self.curr_user == 2:
+            self.queue2.put(src.utils.Message(description="R_1_decommitment", sender=self.party_id, receiver=2, content=self.R_1_decommitment))
+        elif self.curr_user == 3:
+            self.queue3.put(src.utils.Message(description="R_1_decommitment", sender=self.party_id, receiver=3, content=self.R_1_decommitment))
 
     # Third phase of signature protocol
     def signature_3(self, other_R_decommitment):
@@ -285,20 +430,29 @@ class User1(threading.Thread):
         self.e = src.crypto_utils.hash_message(self.R, self.msg_to_sign, self.q) % self.q
 
         # Compute s_1 = k_1 - e * omega_1 mod q
-        self.s_1 = (self.k_1 - self.e * self.omega_1) % self.q
+        if self.recovery:
+            self.s_1 = (self.k_1 - self.e * self.omega_1_tilde) % self.q
+        else:
+            self.s_1 = (self.k_1 - self.e * self.omega_1) % self.q
 
         # Compute the commitment for s_1
         s_1_commitment, s_1_decommitment = src.crypto_utils.commit_single(self.s_1, self.q)
         self.s_1_decommitment = s_1_decommitment
 
         # Send the commitment to the other user
-        self.queue2.put(src.utils.Message(description="s_1_commitment", sender=self.party_id, receiver=2, content=s_1_commitment))
+        if self.curr_user == 2:
+            self.queue2.put(src.utils.Message(description="s_1_commitment", sender=self.party_id, receiver=2, content=s_1_commitment))
+        elif self.curr_user == 3:
+            self.queue3.put(src.utils.Message(description="s_1_commitment", sender=self.party_id, receiver=3, content=s_1_commitment))
 
     # Fourth phase of signature protocol
     def signature_4(self, other_s_commitment):
         self.other_s_commitment = other_s_commitment
         # Send s_1 decommitment to the other user
-        self.queue2.put(src.utils.Message(description="s_1_decommitment", sender=self.party_id, receiver=2, content=self.s_1_decommitment))
+        if self.curr_user == 2:
+            self.queue2.put(src.utils.Message(description="s_1_decommitment", sender=self.party_id, receiver=2, content=self.s_1_decommitment))
+        elif self.curr_user == 3:
+            self.queue3.put(src.utils.Message(description="s_1_decommitment", sender=self.party_id, receiver=3, content=self.s_1_decommitment))
 
     # Fifth phase of signature protocol
     def combine(self, other_s_decommitment):
@@ -319,6 +473,18 @@ class User1(threading.Thread):
                 self.signature = (self.e, self.s)
                 self.signature_completed.set()
 
+    # First phase of recovery signature protocol
+    def recovery_signature_1(self, msg):
+        # Save the message to be signed
+        self.msg_to_sign = msg
+
+        # Send a message to the recovery party to wake it up and start the recovery signature protocol
+        self.queue3.put(src.utils.Message(description="wakeup", sender=self.party_id, receiver=3, content=(self.msg_to_sign, self.A, self.rec_1_3, self.rec_2_3)))
+
+        self.omega_1_tilde = (3 * self.omega_1) // 4
+
+        # ZKP to prove x_i computed correctly should be added here
+
 # The user2 class
 class User2(threading.Thread):
     # Creates a user with a unique party ID (2) and initializes the recovery public key to None
@@ -331,6 +497,7 @@ class User2(threading.Thread):
         self.signature_completed = threading.Event()
         self.abortExceptionQueue = None
         self.failedSignatureExceptionQueue = None
+        self.recovery = False
 
     def set_communication_queues(self, queue1, queue2, queue3, abortExceptionQueue, failedSignatureExceptionQueue):
         self.queue1 = queue1
@@ -374,7 +541,15 @@ class User2(threading.Thread):
         if msg.description == "start_keygen" and msg.sender == 0:
             self.keygen_1()
         if msg.description == "start_signature" and msg.sender == 0:
+            self.recovery = False
+            self.curr_user = 1
             self.signature_1(msg.content)
+        if msg.description == "start_signature" and msg.sender == 3:
+            self.recovery = True
+            self.curr_user = 3
+            self.signature_1(msg.content)
+        if msg.description == "start_recovery_signature" and msg.sender == 0:
+            self.recovery_signature_1(msg.content)
         if msg.description == "signature_fail" and msg.sender == 1:
             self.signature_completed.set()
         if msg.description == "A_Y_commitment" and msg.sender == 1:
@@ -498,13 +673,19 @@ class User2(threading.Thread):
         self.R_2_decommitment = R_2_decommitment
 
         # Send the commitment to the other user
-        self.queue1.put(src.utils.Message(description="R_2_commitment", sender=self.party_id, receiver=1, content=R_2_commitment))
+        if self.curr_user == 1:
+            self.queue1.put(src.utils.Message(description="R_2_commitment", sender=self.party_id, receiver=1, content=R_2_commitment))
+        elif self.curr_user == 3:
+            self.queue3.put(src.utils.Message(description="R_2_commitment", sender=self.party_id, receiver=3, content=R_2_commitment))
 
     # Second phase of signature protocol
     def signature_2(self, other_R_commitment):
         self.other_R_commitment = other_R_commitment
         # Send the decommitment to the other user
-        self.queue1.put(src.utils.Message(description="R_2_decommitment", sender=self.party_id, receiver=1, content=self.R_2_decommitment))
+        if self.curr_user == 1:
+            self.queue1.put(src.utils.Message(description="R_2_decommitment", sender=self.party_id, receiver=1, content=self.R_2_decommitment))
+        elif self.curr_user == 3:
+            self.queue3.put(src.utils.Message(description="R_2_decommitment", sender=self.party_id, receiver=3, content=self.R_2_decommitment))
 
     # Third phase of signature protocol
     def signature_3(self, other_R_decommitment):
@@ -532,20 +713,29 @@ class User2(threading.Thread):
         self.e = src.crypto_utils.hash_message(self.R, self.msg_to_sign, self.q) % self.q
 
         # Compute s_2 = k_2 - e*omega_2 mod q
-        self.s_2 = (self.k_2 - self.e * self.omega_2) % self.q
+        if self.recovery:
+            self.s_2 = (self.k_2 - self.e * self.omega_2_tilde) % self.q
+        else:
+            self.s_2 = (self.k_2 - self.e * self.omega_2) % self.q
 
         # Compute s_2 commitment
         s_2_commitment, s_2_decommitment = src.crypto_utils.commit_single(self.s_2, self.q)
         self.s_2_decommitment = s_2_decommitment
 
         # Send s_2 commitment to the other user
-        self.queue1.put(src.utils.Message(description="s_2_commitment", sender=self.party_id, receiver=1, content=s_2_commitment))
+        if self.curr_user == 1:
+            self.queue1.put(src.utils.Message(description="s_2_commitment", sender=self.party_id, receiver=1, content=s_2_commitment))
+        elif self.curr_user == 3:
+            self.queue3.put(src.utils.Message(description="s_2_commitment", sender=self.party_id, receiver=3, content=s_2_commitment))
 
     # Fourth phase of signature protocol
     def signature_4(self, other_s_commitment):
         self.other_s_commitment = other_s_commitment
         # Send s_2 decommitment to the other user
-        self.queue1.put(src.utils.Message(description="s_2_decommitment", sender=self.party_id, receiver=1, content=self.s_2_decommitment))
+        if self.curr_user == 1:
+            self.queue1.put(src.utils.Message(description="s_2_decommitment", sender=self.party_id, receiver=1, content=self.s_2_decommitment))
+        elif self.curr_user == 3:
+            self.queue3.put(src.utils.Message(description="s_2_decommitment", sender=self.party_id, receiver=3, content=self.s_2_decommitment))
 
     # Fifth phase of signature protocol
     def combine(self, other_s_decommitment):
@@ -565,3 +755,15 @@ class User2(threading.Thread):
             else:
                 self.signature = (self.e, self.s)
                 self.signature_completed.set()
+
+    # First phase of recovery signature protocol
+    def recovery_signature_1(self, msg):
+        # Save the message to be signed
+        self.msg_to_sign = msg
+
+        # Send a message to the recovery party to wake it up and start the recovery signature protocol
+        self.queue3.put(src.utils.Message(description="wakeup", sender=self.party_id, receiver=3, content=(self.msg_to_sign, self.A, self.rec_1_3, self.rec_2_3)))
+
+        self.omega_2_tilde = - (3 * self.omega_2)
+
+        # ZKP to prove x_2 computed correctly should be added here
