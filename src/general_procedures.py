@@ -116,3 +116,62 @@ def begin_signature_protocol(user1, user2, msg):
     user2.signature_completed.clear()  # Reset the event for the next signature
 
     return success1 and success2
+
+def recoverySign(user, recovery_party, msg, failedSignatureExceptionQueue, abortExceptionQueue):
+    try:
+        success = src.general_procedures.begin_recovery_signature_protocol(user, recovery_party, msg, failedSignatureExceptionQueue, abortExceptionQueue)
+
+        try: 
+            # Check if any of the threads has put a SignatureException in the failedSignatureExceptionQueue
+            exc, guilty = failedSignatureExceptionQueue.get_nowait() # will return a couple (exception, guilty_party_id)
+
+            # Readd the exception in the queue to be caught in main function
+            failedSignatureExceptionQueue.put((exc, guilty))
+            raise exc
+        except queue.Empty:
+            pass
+
+        try:
+            # Check if any of the threads has put an exception in the abortExceptionQueue
+            exc = abortExceptionQueue.get_nowait()
+            raise exc
+        except queue.Empty:
+            pass
+
+        if success and user.signature == recovery_party.signature:
+            print("Recovery signature generation completed successfully!")
+            # Print the signature (S, E) for the message
+            print("Signature: ", user.signature)
+        elif success and user.signature != recovery_party.signature:
+            print("Recovery signature generation completed, but the signatures do not match!")
+        else:           
+            print("Recovery signature generation failed!")
+
+    except SignatureException as e:
+        # Stampa messaggio di errore che indica il colpevole (user1 o user2) e l'eccezione di firma
+        print(f"Main: eccezione di firma - colpevole: user{guilty}, eccezione: {e}")
+        print("Main: suggerimento - eseguire il protocollo di firma di recupero per generare una firma valida per il messaggio.")
+
+def begin_recovery_signature_protocol(user, recovery_party, msg, failedSignatureExceptionQueue, abortExceptionQueue):
+    # Send to user (1 or 2) the message to start the recovery signature generation protocol
+    message = src.utils.Message(description="start_recovery_signature", sender=0, receiver=0, content=msg)
+    if user.party_id == 1:
+        user.queue1.put(message)
+    elif user.party_id == 2:
+        user.queue2.put(message)
+    else:
+        raise ProtocolAbortedException("Invalid user party_id. Must be 1 or 2.")
+    
+
+    # if the user does not/cannot participate, a SignatureException is insterted in the
+    # failedSignatureExceptionQueue, which will be caught in the main function, and the protocol will suggest to perform 
+    # a recovery signature
+
+    timeout = 10  # secondi
+    success1 = user.signature_completed.wait(timeout)
+    success2 = recovery_party.signature_completed.wait(timeout)
+
+    user.signature_completed.clear()  # Reset the event for the next signature
+    recovery_party.signature_completed.clear()  # Reset the event for the next signature
+
+    return success1 and success2
