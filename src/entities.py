@@ -247,7 +247,10 @@ class User1(threading.Thread):
                 self.abortExceptionQueue.put(e)  # Put the exception in the abortExceptionQueue to communicate it to the main thread
                 raise
             except src.utils.SignatureException as e:
-                self.queue2.put(src.utils.Message(description="signature_fail", sender=self.party_id, receiver=2, content=None))  # Inform the other user that the signature protocol failed
+                if self.recovery:
+                    self.queue3.put(src.utils.Message(description="signature_fail", sender=self.party_id, receiver=3, content=None))  # Inform the recovery party that the signature protocol failed
+                else:
+                    self.queue2.put(src.utils.Message(description="signature_fail", sender=self.party_id, receiver=2, content=None))  # Inform the other user that the signature protocol failed
                 self.failedSignatureExceptionQueue.put((e, self.party_id))
                 self.signature_completed.set()                  
                 raise
@@ -529,7 +532,10 @@ class User2(threading.Thread):
                 self.abortExceptionQueue.put(e)  # Put the exception in the abortExceptionQueue to communicate it to the main thread
                 raise
             except src.utils.SignatureException as e:
-                self.queue1.put(src.utils.Message(description="signature_fail", sender=self.party_id, receiver=1, content=None))  # Inform the other user that the signature protocol failed
+                if self.recovery:
+                    self.queue3.put(src.utils.Message(description="signature_fail", sender=self.party_id, receiver=3, content=None))  # Inform the recovery party that the signature protocol failed
+                else:
+                    self.queue1.put(src.utils.Message(description="signature_fail", sender=self.party_id, receiver=1, content=None))  # Inform the other user that the signature protocol failed
                 self.failedSignatureExceptionQueue.put((e, self.party_id))  # Put the exception and the guilty party id 
                 self.signature_completed.set()
                 raise
