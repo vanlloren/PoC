@@ -22,8 +22,6 @@ def main():
             pass
 
         if success:
-            print("A of user1: ", user1.A)
-            print("A of user2: ", user2.A)
             print("Key generation completed successfully!")
         else:
             print("Key generation failed!")
