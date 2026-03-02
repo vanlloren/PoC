@@ -92,7 +92,7 @@ class RecoveryParty(threading.Thread):
 
         # Depending on the other party, compute omega_3
         if user == 1:
-            self.omega_3 = - (x_3 // 2) % self.q
+            self.omega_3 = - (x_3 *  pow(2, -1, self.q)) % self.q
         elif user == 2:
             self.omega_3 = - (2* x_3) % self.q
 
@@ -481,7 +481,7 @@ class User1(threading.Thread):
         # Send a message to the recovery party to wake it up and start the recovery signature protocol
         self.queue3.put(src.utils.Message(description="wakeup", sender=self.party_id, receiver=3, content=(self.msg_to_sign, self.A, self.rec_1_3, self.rec_2_3)))
 
-        self.omega_1_tilde = (3 * self.omega_1) // 4
+        self.omega_1_tilde = (3 * self.omega_1) * pow(4, -1, self.q) % self.q  # omega_1_tilde = (3/4)*omega_1 mod q
 
         # ZKP to prove x_i computed correctly should be added here
 
