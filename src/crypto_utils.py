@@ -4,6 +4,7 @@ from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.asymmetric import utils
 import hashlib
 import secrets
+from Crypto.Hash import TupleHash256 as TupleHash
 
 # Generates a Schnorr group with specified parameters
 def generate_schnorr_group():
@@ -150,3 +151,26 @@ def verify_commitment(commitment, decommitment):
         return True
     else:        
         return False
+
+# Used to compute the hash of the quartet g, q, h, u 
+# where g is the generator of the group, q is the order of the group,
+# h is g^something, and u is g^somethingelse
+def tuple_hash(arg1, arg2, arg3, arg4):
+    # Convert arguments to bytes
+    arg1_bytes = arg1.to_bytes(384, byteorder='big')  # g is 3072 bits, so 384 bytes
+    arg2_bytes = arg2.to_bytes(32, byteorder='big')   # q is 256 bits, so 32 bytes
+    arg3_bytes = arg3.to_bytes(384, byteorder='big')  # h is 3072 bits, so 384 bytes
+    arg4_bytes = arg4.to_bytes(384, byteorder='big')  # u is 3072 bits, so 384 bytes
+
+    # Create a TupleHash object
+    tuple_hash_obj = TupleHash.new(digest_bits=256)
+
+    # Update the hash with the byte representations of the arguments
+    tuple_hash_obj.update(arg1_bytes)
+    tuple_hash_obj.update(arg2_bytes)
+    tuple_hash_obj.update(arg3_bytes)
+    tuple_hash_obj.update(arg4_bytes)
+
+    # Finalize and return the hash digest as an integer
+    hash_digest = tuple_hash_obj.digest()
+    return int.from_bytes(hash_digest, byteorder='big')
