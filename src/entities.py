@@ -314,7 +314,7 @@ class User1(threading.Thread):
             self.queue2.put(src.utils.Message(description="zk_response_x", sender=self.party_id, receiver=2, content=self.z))
         if msg.description == "zk_response_x" and msg.sender == 2:
             if (msg.content % self.q) != 0  and pow(self.g, msg.content, self.p) == (self.other_u * pow(self.other_X, self.c, self.p)) % self.p:
-                self.keygen_5_part2()
+                self.keygen_5_part3()
             else:
                 src.general_procedures.abort()
         if msg.description == "zk_proof_x" and msg.sender == 3:
@@ -364,6 +364,23 @@ class User1(threading.Thread):
             self.y_2_1 = y_2_1
             self.rec_2_3 = rec_2_3
             self.keygen_5()
+        if msg.description == "nizkp_proof" and msg.sender == 2:
+            # Do actions
+            if msg.content[0] == 0 or msg.content[3] == 0 or msg.content[4] == 0 or msg.content[7] == 0:
+                src.general_procedures.abort()
+            # msg.content[0] o msg.content[3] o msg.content[4] o msg.content[7] not in the group G
+            elif pow(msg.content[0], self.q, self.p) != 1 or pow(msg.content[3], self.q, self.p) != 1 or pow(msg.content[4], self.q, self.p) != 1 or pow(msg.content[7], self.q, self.p) != 1:
+                src.general_procedures.abort()
+            # check z1 and z2 != mod q
+            elif (msg.content[2] % self.q == 0) or (msg.content[6] % self.q == 0):
+                src.general_procedures.abort()
+            else:
+                if msg.content[1] != src.crypto_utils.tuple_hash(self.g, self.q, msg.content[3], msg.content[0]) or msg.content[5] != src.crypto_utils.tuple_hash(self.g, self.q, msg.content[7], msg.content[4]):
+                    src.general_procedures.abort()
+                elif pow(self.g, msg.content[2], self.p) != (msg.content[0] * pow(msg.content[3], msg.content[1], self.p)) % self.p or pow(self.g, msg.content[6], self.p) != (msg.content[4] * pow(msg.content[7], msg.content[5], self.p)) % self.p:
+                    src.general_procedures.abort()
+                else:
+                    self.keygen_5_part2()
         if (msg.description == "R_2_commitment" and msg.sender == 2) or (msg.description == "R_3_commitment" and msg.sender == 3):
             self.signature_2(msg.content)
         if (msg.description == "R_2_decommitment" and msg.sender == 2) or (msg.description == "R_3_decommitment" and msg.sender == 3):
@@ -429,13 +446,28 @@ class User1(threading.Thread):
         self.rec_1_3 = (enc_y_1_3, enc_y_3_1)
 
         # Send y_1_j and rec_1_3 to the other user
-        # MISSING TODO: Add NIZKP
         self.queue2.put(src.utils.Message(description="rec_info", sender=self.party_id, receiver=2, content=(self.y_1_2, self.rec_1_3)))
         
     # Fifth phase of key generation
     def keygen_5(self):
-        # MISSING TODO: Check NIZKP
+        self.nizkp_prove()
 
+    def nizkp_prove(self):
+        self.nizkp_nonce1 = secrets.randbelow(self.q - 1) + 1
+        self.nizkp_u1 = pow(self.g, self.nizkp_nonce1, self.p)
+        self.nizkp_h1 = pow(self.g, self.y_1_3, self.p)
+        self.nizkp_c1 = src.crypto_utils.tuple_hash(self.g, self.q, self.nizkp_h1, self.nizkp_u1)
+        self.nizkp_z1 = (self.nizkp_nonce1 + self.y_1_3 * self.nizkp_c1) % self.q
+
+        self.nizkp_nonce2 = secrets.randbelow(self.q - 1) + 1
+        self.nizkp_u2 = pow(self.g, self.nizkp_nonce2, self.p)
+        self.nizkp_h2 = pow(self.g, self.y_3_1, self.p)
+        self.nizkp_c2 = src.crypto_utils.tuple_hash(self.g, self.q, self.nizkp_h2, self.nizkp_u2)
+        self.nizkp_z2 = (self.nizkp_nonce2 + self.y_3_1 * self.nizkp_c2) % self.q
+
+        self.queue2.put(src.utils.Message(description="nizkp_proof", sender=self.party_id, receiver=2, content=(self.nizkp_u1, self.nizkp_c1, self.nizkp_z1, self.nizkp_h1, self.nizkp_u2, self.nizkp_c2, self.nizkp_z2, self.nizkp_h2)))
+
+    def keygen_5_part2(self):
         if pow(self.g, self.y_2_1, self.p) != self.A_Y_other_decommitment[0] * pow(self.M_2, 1, self.p) % self.p:
             src.general_procedures.abort()        
 
@@ -454,7 +486,7 @@ class User1(threading.Thread):
         else:
             self.queue2.put(src.utils.Message(description="zk_proof_x", sender=self.party_id, receiver=2, content=(self.u, self.X)))
 
-    def keygen_5_part2(self):
+    def keygen_5_part3(self):
         # Compute public key A
         self.A_3 = pow(self.Y_3_1, 2, self.p) * pow(self.A_Y_other_decommitment[1], -1, self.p) % self.p
         self.A = (self.A_1 * self.A_Y_other_decommitment[0] * self.A_3) % self.p
@@ -650,7 +682,7 @@ class User2(threading.Thread):
             self.queue1.put(src.utils.Message(description="zk_response_x", sender=self.party_id, receiver=1, content=self.z))
         if msg.description == "zk_response_x" and msg.sender == 1:
             if (msg.content % self.q) != 0  and pow(self.g, msg.content, self.p) == (self.other_u * pow(self.other_X, self.c, self.p)) % self.p:
-                self.keygen_5_part2()
+                self.keygen_5_part3()
             else:
                 src.general_procedures.abort()
         if msg.description == "zk_proof_x" and msg.sender == 3:
@@ -700,6 +732,22 @@ class User2(threading.Thread):
             self.y_1_2 = y_1_2
             self.rec_1_3 = rec_1_3
             self.keygen_5()
+        if msg.description == "nizkp_proof" and msg.sender == 1:
+            # Do actions
+            if msg.content[0] == 0 or msg.content[3] == 0 or msg.content[4] == 0 or msg.content[7] == 0:
+                src.general_procedures.abort()
+            # msg.content[0] o msg.content[3] o msg.content[4] o msg.content[7] not in the group G
+            elif pow(msg.content[0], self.q, self.p) != 1 or pow(msg.content[3], self.q, self.p) != 1 or pow(msg.content[4], self.q, self.p) != 1 or pow(msg.content[7], self.q, self.p) != 1:
+                src.general_procedures.abort()
+            elif msg.content[2] == 0 or msg.content[6] == 0:
+                src.general_procedures.abort()
+            else:
+                if msg.content[1] != src.crypto_utils.tuple_hash(self.g, self.q, msg.content[3], msg.content[0]) or msg.content[5] != src.crypto_utils.tuple_hash(self.g, self.q, msg.content[7], msg.content[4]):
+                    src.general_procedures.abort()
+                elif pow(self.g, msg.content[2], self.p) != (msg.content[0] * pow(msg.content[3], msg.content[1], self.p)) % self.p or pow(self.g, msg.content[6], self.p) != (msg.content[4] * pow(msg.content[7], msg.content[5], self.p)) % self.p:
+                    src.general_procedures.abort()
+                else:
+                    self.keygen_5_part2()
         if (msg.description == "R_1_commitment" and msg.sender == 1) or (msg.description == "R_3_commitment" and msg.sender == 3):
             self.signature_2(msg.content)
         if (msg.description == "R_1_decommitment" and msg.sender == 1) or (msg.description == "R_3_decommitment" and msg.sender == 3):
@@ -771,8 +819,24 @@ class User2(threading.Thread):
         
     # Fifth phase of key generation
     def keygen_5(self):
-        # MISSING TODO: Check NIZKP
+        self.nizkp_prove()
 
+    def nizkp_prove(self):
+        self.nizkp_nonce1 = secrets.randbelow(self.q - 1) + 1
+        self.nizkp_u1 = pow(self.g, self.nizkp_nonce1, self.p)
+        self.nizkp_h1 = pow(self.g, self.y_2_3, self.p)
+        self.nizkp_c1 = src.crypto_utils.tuple_hash(self.g, self.q, self.nizkp_h1, self.nizkp_u1)
+        self.nizkp_z1 = (self.nizkp_nonce1 + self.y_2_3 * self.nizkp_c1) % self.q
+
+        self.nizkp_nonce2 = secrets.randbelow(self.q - 1) + 1
+        self.nizkp_u2 = pow(self.g, self.nizkp_nonce2, self.p)
+        self.nizkp_h2 = pow(self.g, self.y_3_2, self.p)
+        self.nizkp_c2 = src.crypto_utils.tuple_hash(self.g, self.q, self.nizkp_h2, self.nizkp_u2)
+        self.nizkp_z2 = (self.nizkp_nonce2 + self.y_3_2 * self.nizkp_c2) % self.q
+
+        self.queue1.put(src.utils.Message(description="nizkp_proof", sender=self.party_id, receiver=1, content=(self.nizkp_u1, self.nizkp_c1, self.nizkp_z1, self.nizkp_h1, self.nizkp_u2, self.nizkp_c2, self.nizkp_z2, self.nizkp_h2)))
+
+    def keygen_5_part2(self):
         if pow(self.g, self.y_1_2, self.p) != self.A_Y_other_decommitment[0] * pow(self.M_1, 2, self.p) % self.p:
             src.general_procedures.abort()        
 
@@ -791,7 +855,7 @@ class User2(threading.Thread):
         else:
             self.queue1.put(src.utils.Message(description="zk_proof_x", sender=self.party_id, receiver=1, content=(self.u, self.X)))
 
-    def keygen_5_part2(self):
+    def keygen_5_part3(self):
         # Compute public key A
         self.A_3 = pow(self.A_Y_other_decommitment[1], 2, self.p) * pow(self.Y_3_2, -1, self.p) % self.p
         self.A = (self.A_2 * self.A_Y_other_decommitment[0] * self.A_3) % self.p
