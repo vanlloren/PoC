@@ -53,6 +53,32 @@ class RecoveryParty(threading.Thread):
     def processMessage(self, msg):
         if msg.description == "wakeup" and msg.sender in [1,2]:
             self.wakeup(msg.content[0], msg.sender, msg.content[1], msg.content[2], msg.content[3])
+        if msg.description == 'zk_proof_x' and msg.sender in [1,2]:
+            if msg.content[0] == 0 or msg.content[1] == 0:
+                src.general_procedures.abort()
+            # msg.content[0] o msg.content[1] not in the group G
+            elif pow(msg.content[0], self.q, self.p) != 1 or pow(msg.content[1], self.q, self.p) != 1:
+                src.general_procedures.abort()
+            else:
+                self.other_u = msg.content[0]
+                self.other_X = msg.content[1]
+                self.c = secrets.randbelow(self.q - 1) + 1
+                if msg.sender == 1:
+                    self.queue1.put(src.utils.Message(description="zk_challenge_x", sender=self.party_id, receiver=1, content=self.c))
+                elif msg.sender == 2:
+                    self.queue2.put(src.utils.Message(description="zk_challenge_x", sender=self.party_id, receiver=2, content=self.c))
+        if msg.description == 'zk_challenge_x' and msg.sender in [1,2]:
+            self.other_c = msg.content
+            self.z = self.zk_nonce + self.x_3 * self.other_c % self.q
+            if msg.sender == 1:
+                self.queue1.put(src.utils.Message(description="zk_response_x", sender=self.party_id, receiver=1, content=self.z))
+            elif msg.sender == 2:
+                self.queue2.put(src.utils.Message(description="zk_response_x", sender=self.party_id, receiver=2, content=self.z))
+        if msg.description == 'zk_response_x' and msg.sender in [1,2]:
+            if (msg.content % self.q) != 0  and pow(self.g, msg.content, self.p) == (self.other_u * pow(self.other_X, self.c, self.p)) % self.p:
+                self.signature_1()
+            else:
+                src.general_procedures.abort()
         if (msg.description == "R_1_commitment" and msg.sender == 1) or (msg.description == "R_2_commitment" and msg.sender == 2):
             self.signature_2(msg.content)
         if (msg.description == "R_1_decommitment" and msg.sender == 1) or (msg.description == "R_2_decommitment" and msg.sender == 2):
@@ -86,15 +112,15 @@ class RecoveryParty(threading.Thread):
         A_3 = pow(self.g, a_3, self.p)
 
         # Compute private key x_3
-        x_3 = (y_1_3 + y_2_3 + 2*y_3_2 - y_3_1) % self.q
+        self.x_3 = (y_1_3 + y_2_3 + 2*y_3_2 - y_3_1) % self.q
 
         # TODO: Add ZKP to prove correct computation of x_3 without revealing it
 
         # Depending on the other party, compute omega_3
         if user == 1:
-            self.omega_3 = - (x_3 *  pow(2, -1, self.q)) % self.q
+            self.omega_3 = - (self.x_3 *  pow(2, -1, self.q)) % self.q
         elif user == 2:
-            self.omega_3 = - (2* x_3) % self.q
+            self.omega_3 = - (2* self.x_3) % self.q
 
         # Send a message to the user to start the recovery signature protocol
         if user == 1:
@@ -104,7 +130,17 @@ class RecoveryParty(threading.Thread):
             message = src.utils.Message(description="start_signature", sender=self.party_id, receiver=2, content=self.message)
             self.queue2.put(message)
 
-        self.signature_1()
+        self.zk_prove_x()
+    
+    def zk_prove_x(self):
+        self.zk_nonce = secrets.randbelow(self.q -1) + 1
+        self.u = pow(self.g, self.zk_nonce, self.p)
+        self.X = pow(self.g, self.x_3, self.p)
+
+        if self.curr_user == 1:
+            self.queue1.put(src.utils.Message(description="zk_proof_x", sender=self.party_id, receiver=1, content=(self.u, self.X)))
+        elif self.curr_user == 2:
+            self.queue2.put(src.utils.Message(description="zk_proof_x", sender=self.party_id, receiver=2, content=(self.u, self.X)))
 
     # First phase of signature
     def signature_1(self):
@@ -261,6 +297,46 @@ class User1(threading.Thread):
     def processMessage(self, msg):
         if msg.description == "start_keygen" and msg.sender == 0:
             self.keygen_1()
+        if msg.description == "zk_proof_x" and msg.sender == 2:
+            if msg.content[0] == 0 or msg.content[1] == 0:
+                src.general_procedures.abort()
+            # msg.content[0] o msg.content[1] not in the group G
+            elif pow(msg.content[0], self.q, self.p) != 1 or pow(msg.content[1], self.q, self.p) != 1:
+                src.general_procedures.abort()
+            else:
+                self.other_u = msg.content[0]
+                self.other_X = msg.content[1]
+                self.c = secrets.randbelow(self.q - 1) + 1
+                self.queue2.put(src.utils.Message(description="zk_challenge_x", sender=self.party_id, receiver=2, content=self.c))
+        if msg.description == "zk_challenge_x" and msg.sender == 2:
+            self.other_c = msg.content
+            self.z = self.zk_nonce + self.x_1 * self.other_c % self.q
+            self.queue2.put(src.utils.Message(description="zk_response_x", sender=self.party_id, receiver=2, content=self.z))
+        if msg.description == "zk_response_x" and msg.sender == 2:
+            if (msg.content % self.q) != 0  and pow(self.g, msg.content, self.p) == (self.other_u * pow(self.other_X, self.c, self.p)) % self.p:
+                self.keygen_5_part2()
+            else:
+                src.general_procedures.abort()
+        if msg.description == "zk_proof_x" and msg.sender == 3:
+            if msg.content[0] == 0 or msg.content[1] == 0:
+                src.general_procedures.abort()
+            # msg.content[0] o msg.content[1] not in the group G
+            elif pow(msg.content[0], self.q, self.p) != 1 or pow(msg.content[1], self.q, self.p) != 1:
+                src.general_procedures.abort()
+            else:
+                self.other_u = msg.content[0]
+                self.other_X = msg.content[1]
+                self.c = secrets.randbelow(self.q - 1) + 1
+                self.queue3.put(src.utils.Message(description="zk_challenge_x", sender=self.party_id, receiver=3, content=self.c))
+        if msg.description == "zk_challenge_x" and msg.sender == 3:
+            self.other_c = msg.content
+            self.z = self.zk_nonce + self.x_1 * self.other_c % self.q
+            self.queue3.put(src.utils.Message(description="zk_response_x", sender=self.party_id, receiver=3, content=self.z))
+        if msg.description == "zk_response_x" and msg.sender == 3:
+            if (msg.content % self.q) != 0  and pow(self.g, msg.content, self.p) == (self.other_u * pow(self.other_X, self.c, self.p)) % self.p:
+                self.signature_1(self.msg_content)
+            else:
+                src.general_procedures.abort()
         if msg.description == "start_signature" and msg.sender == 0:
             self.recovery = False
             self.curr_user = 2
@@ -268,7 +344,8 @@ class User1(threading.Thread):
         if msg.description == "start_signature" and msg.sender == 3:
             self.recovery = True
             self.curr_user = 3
-            self.signature_1(msg.content)
+            self.msg_content = msg.content
+            self.zk_prove_x()
         if msg.description == "start_recovery_signature" and msg.sender == 0:
             self.recovery_signature_1(msg.content)
         if msg.description == "signature_fail" and msg.sender == 2:
@@ -366,8 +443,18 @@ class User1(threading.Thread):
         self.x_1 = (self.y_1_1 + self.y_2_1 + self.y_3_1) % self.q
 
         # ZKP to prove correct computation of x_i without revealing it should be added here
-        # TODO: Add ZKP
+        self.zk_prove_x()
 
+    def zk_prove_x(self):
+        self.zk_nonce = secrets.randbelow(self.q -1) + 1
+        self.u = pow(self.g, self.zk_nonce, self.p)
+        self.X = pow(self.g, self.x_1, self.p)
+        if self.recovery:
+            self.queue3.put(src.utils.Message(description="zk_proof_x", sender=self.party_id, receiver=1, content=(self.u, self.X)))
+        else:
+            self.queue2.put(src.utils.Message(description="zk_proof_x", sender=self.party_id, receiver=2, content=(self.u, self.X)))
+
+    def keygen_5_part2(self):
         # Compute public key A
         self.A_3 = pow(self.Y_3_1, 2, self.p) * pow(self.A_Y_other_decommitment[1], -1, self.p) % self.p
         self.A = (self.A_1 * self.A_Y_other_decommitment[0] * self.A_3) % self.p
@@ -546,6 +633,46 @@ class User2(threading.Thread):
     def processMessage(self, msg):
         if msg.description == "start_keygen" and msg.sender == 0:
             self.keygen_1()
+        if msg.description == "zk_proof_x" and msg.sender == 1:
+            if msg.content[0] == 0 or msg.content[1] == 0:
+                src.general_procedures.abort()
+            # msg.content[0] o msg.content[1] not in the group G
+            elif pow(msg.content[0], self.q, self.p) != 1 or pow(msg.content[1], self.q, self.p) != 1:
+                src.general_procedures.abort()
+            else:
+                self.other_u = msg.content[0]
+                self.other_X = msg.content[1]
+                self.c = secrets.randbelow(self.q - 1) + 1
+                self.queue1.put(src.utils.Message(description="zk_challenge_x", sender=self.party_id, receiver=1, content=self.c))
+        if msg.description == "zk_challenge_x" and msg.sender == 1:
+            self.other_c = msg.content
+            self.z = self.zk_nonce + self.x_2 * self.other_c % self.q
+            self.queue1.put(src.utils.Message(description="zk_response_x", sender=self.party_id, receiver=1, content=self.z))
+        if msg.description == "zk_response_x" and msg.sender == 1:
+            if (msg.content % self.q) != 0  and pow(self.g, msg.content, self.p) == (self.other_u * pow(self.other_X, self.c, self.p)) % self.p:
+                self.keygen_5_part2()
+            else:
+                src.general_procedures.abort()
+        if msg.description == "zk_proof_x" and msg.sender == 3:
+            if msg.content[0] == 0 or msg.content[1] == 0:
+                src.general_procedures.abort()
+            # msg.content[0] o msg.content[1] not in the group G
+            elif pow(msg.content[0], self.q, self.p) != 1 or pow(msg.content[1], self.q, self.p) != 1:
+                src.general_procedures.abort()
+            else:
+                self.other_u = msg.content[0]
+                self.other_X = msg.content[1]
+                self.c = secrets.randbelow(self.q - 1) + 1
+                self.queue3.put(src.utils.Message(description="zk_challenge_x", sender=self.party_id, receiver=3, content=self.c))
+        if msg.description == "zk_challenge_x" and msg.sender == 3:
+            self.other_c = msg.content
+            self.z = self.zk_nonce + self.x_2 * self.other_c % self.q
+            self.queue3.put(src.utils.Message(description="zk_response_x", sender=self.party_id, receiver=3, content=self.z))
+        if msg.description == "zk_response_x" and msg.sender == 3:
+            if (msg.content % self.q) != 0  and pow(self.g, msg.content, self.p) == (self.other_u * pow(self.other_X, self.c, self.p)) % self.p:
+                self.signature_1(self.msg_content)
+            else:
+                src.general_procedures.abort()
         if msg.description == "start_signature" and msg.sender == 0:
             self.recovery = False
             self.curr_user = 1
@@ -553,7 +680,8 @@ class User2(threading.Thread):
         if msg.description == "start_signature" and msg.sender == 3:
             self.recovery = True
             self.curr_user = 3
-            self.signature_1(msg.content)
+            self.msg_content = msg.content
+            self.zk_prove_x()
         if msg.description == "start_recovery_signature" and msg.sender == 0:
             self.recovery_signature_1(msg.content)
         if msg.description == "signature_fail" and msg.sender == 1:
@@ -652,8 +780,18 @@ class User2(threading.Thread):
         self.x_2 = (self.y_1_2 + self.y_2_2 + self.y_3_2) % self.q
 
         # ZKP to prove correct computation of x_2 without revealing it should be added here
-        # TODO: Add ZKP
+        self.zk_prove_x()
 
+    def zk_prove_x(self):
+        self.zk_nonce = secrets.randbelow(self.q -1) + 1
+        self.u = pow(self.g, self.zk_nonce, self.p)
+        self.X = pow(self.g, self.x_2, self.p)
+        if self.recovery:
+            self.queue3.put(src.utils.Message(description="zk_proof_x", sender=self.party_id, receiver=1, content=(self.u, self.X)))
+        else:
+            self.queue1.put(src.utils.Message(description="zk_proof_x", sender=self.party_id, receiver=1, content=(self.u, self.X)))
+
+    def keygen_5_part2(self):
         # Compute public key A
         self.A_3 = pow(self.A_Y_other_decommitment[1], 2, self.p) * pow(self.Y_3_2, -1, self.p) % self.p
         self.A = (self.A_2 * self.A_Y_other_decommitment[0] * self.A_3) % self.p
