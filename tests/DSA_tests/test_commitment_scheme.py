@@ -1,5 +1,5 @@
 import pytest
-from src.crypto_utils import commit_single, commit_couple, verify_commitment, generate_schnorr_group
+from PoC_DSA.src.crypto_utils import commit_single, commit_couple, verify_commitment, generate_schnorr_group
 
 # A hash-based commitment scheme is certainly:
 # 1. Hiding: From a SHA-256 hash, it is computationally infeasible to find the original input values

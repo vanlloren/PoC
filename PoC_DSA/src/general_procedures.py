@@ -1,12 +1,12 @@
 # This file will contain the general procedures used in the protocol such as key generation, ordinary signature generation and recovery signature generation. These procedures will be called in the main function and in the test files to simulate the protocol and analyze its robustness against malicious adversaries.
 
-import src.crypto_utils
-import src.entities
+import PoC_DSA.src.crypto_utils
+import PoC_DSA.src.entities
 import threading
 import time
 import queue
-import src.utils
-from src.utils import ProtocolAbortedException, SignatureException
+import PoC_DSA.src.utils
+from PoC_DSA.src.utils import ProtocolAbortedException, SignatureException
 
 def initialize_protocol():
     # Create queues for communication between the parties
@@ -17,9 +17,9 @@ def initialize_protocol():
     failedSignatureExceptionQueue = queue.Queue()  # To communicate signature exceptions from threads to general procedures
 
     # Initialize the recovery party and the users
-    recovery_party = src.entities.RecoveryParty()
-    user1 = src.entities.User1(party_id=1)
-    user2 = src.entities.User2(party_id=2)
+    recovery_party = PoC_DSA.src.entities.RecoveryParty()
+    user1 = PoC_DSA.src.entities.User1(party_id=1)
+    user2 = PoC_DSA.src.entities.User2(party_id=2)
 
     # Send the queues to the users and the recovery party
     user1.set_communication_queues(queue1, queue2, queue3, abortExceptionQueue, failedSignatureExceptionQueue)
@@ -27,7 +27,7 @@ def initialize_protocol():
     recovery_party.set_communication_queues(queue1, queue2, queue3, abortExceptionQueue)
 
     # Generate group parameters (p, q, g) for the protocol
-    p, q, g = src.crypto_utils.generate_schnorr_group()
+    p, q, g = PoC_DSA.src.crypto_utils.generate_schnorr_group()
 
     # Set the group parameters for all the parties
     recovery_party.set_group_parameters(p, q, g)
@@ -45,16 +45,16 @@ def initialize_protocol():
 
 # This function aborts the protocol 
 def abort():
-    raise src.utils.ProtocolAbortedException("Protocol aborted due to an error or malicious behavior.")
+    raise PoC_DSA.src.utils.ProtocolAbortedException("Protocol aborted due to an error or malicious behavior.")
 
 # This function raises a SignatureException
 def raise_signature_exception(guilty_party_id):
-    raise src.utils.SignatureException(f"Signature generation failed due to malicious behavior of user{guilty_party_id}.")
+    raise PoC_DSA.src.utils.SignatureException(f"Signature generation failed due to malicious behavior of user{guilty_party_id}.")
 
 # This function simulates the key generation protocol between two users
 def begin_keygen_protocol(user1, user2):
     # Send to user1 and user2 the message to start the key generation protocol
-    msg = src.utils.Message(description="start_keygen", sender=0, receiver=0, content=None)
+    msg = PoC_DSA.src.utils.Message(description="start_keygen", sender=0, receiver=0, content=None)
     user1.queue1.put(msg)
     user2.queue2.put(msg)
 
@@ -66,7 +66,7 @@ def begin_keygen_protocol(user1, user2):
 
 def sign(user1, user2, msg, failedSignatureExceptionQueue, abortExceptionQueue):
     try:
-        success = src.general_procedures.begin_signature_protocol(user1, user2, msg)
+        success = PoC_DSA.src.general_procedures.begin_signature_protocol(user1, user2, msg)
 
         try: 
             # Check if any of the threads has put a SignatureException in the failedSignatureExceptionQueue
@@ -100,7 +100,7 @@ def sign(user1, user2, msg, failedSignatureExceptionQueue, abortExceptionQueue):
 # This function simulates the ordinary signature generation protocol between two users
 def begin_signature_protocol(user1, user2, msg):
     # Send to user1 and user2 the message to start the signature generation protocol
-    message = src.utils.Message(description="start_signature", sender=0, receiver=0, content=msg)
+    message = PoC_DSA.src.utils.Message(description="start_signature", sender=0, receiver=0, content=msg)
     user1.queue1.put(message)
     user2.queue2.put(message)
 
@@ -119,7 +119,7 @@ def begin_signature_protocol(user1, user2, msg):
 
 def recoverySign(user, recovery_party, msg, failedSignatureExceptionQueue, abortExceptionQueue):
     try:
-        success = src.general_procedures.begin_recovery_signature_protocol(user, recovery_party, msg, failedSignatureExceptionQueue, abortExceptionQueue)
+        success = PoC_DSA.src.general_procedures.begin_recovery_signature_protocol(user, recovery_party, msg, failedSignatureExceptionQueue, abortExceptionQueue)
 
         try: 
             # Check if any of the threads has put a SignatureException in the failedSignatureExceptionQueue
@@ -147,20 +147,20 @@ def recoverySign(user, recovery_party, msg, failedSignatureExceptionQueue, abort
         else:           
             print("Recovery signature generation failed!")
 
-    except SignatureException as e:
+    except PoC_DSA.src.utils.SignatureException as e:
         # Stampa messaggio di errore che indica il colpevole (user1 o user2) e l'eccezione di firma
         print(f"Main: eccezione di firma - colpevole: user{guilty}, eccezione: {e}")
         print("Main: suggerimento - eseguire il protocollo di firma di recupero per generare una firma valida per il messaggio.")
 
 def begin_recovery_signature_protocol(user, recovery_party, msg, failedSignatureExceptionQueue, abortExceptionQueue):
     # Send to user (1 or 2) the message to start the recovery signature generation protocol
-    message = src.utils.Message(description="start_recovery_signature", sender=0, receiver=0, content=msg)
+    message = PoC_DSA.src.utils.Message(description="start_recovery_signature", sender=0, receiver=0, content=msg)
     if user.party_id == 1:
         user.queue1.put(message)
     elif user.party_id == 2:
         user.queue2.put(message)
     else:
-        raise ProtocolAbortedException("Invalid user party_id. Must be 1 or 2.")
+        raise PoC_DSA.src.utils.ProtocolAbortedException("Invalid user party_id. Must be 1 or 2.")
     
 
     # if the user does not/cannot participate, a SignatureException is insterted in the

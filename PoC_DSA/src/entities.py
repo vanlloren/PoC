@@ -1,18 +1,18 @@
 # This file contains the definitions of the entities used in the protocol such as RecoveryParty and User1 and User2.
 
-import src.crypto_utils
-import src.general_procedures
+import PoC_DSA.src.crypto_utils
+import PoC_DSA.src.general_procedures
 import threading
 import secrets
 import queue
-from src.general_procedures import abort
+from PoC_DSA.src.general_procedures import abort
 
 # The offline RecoveryParty
 class RecoveryParty(threading.Thread):
     # Creates a recovery party with its own RSA key pair for encryption and decryption
     def __init__(self):
         super().__init__()
-        self.enc_private_key, self.enc_public_key = src.crypto_utils.generate_rsa_keypair()
+        self.enc_private_key, self.enc_public_key = PoC_DSA.src.crypto_utils.generate_rsa_keypair()
         self.running = True
         self.exceptionQueue = None
         self.party_id = 3  # The recovery party has a fixed party ID of 3
@@ -41,7 +41,7 @@ class RecoveryParty(threading.Thread):
             try:
                 msg = self.queue3.get(timeout=10)  # Wait for a message from the users
                 self.processMessage(msg)  # Process the message and continue the protocol
-            except src.utils.ProtocolAbortedException as e:
+            except PoC_DSA.src.utils.ProtocolAbortedException as e:
                 self.aborted = True
                 self.running = False
                 self.abortExceptionQueue.put(e)  # Put the exception in the abortExceptionQueue to communicate it to the main thread
@@ -55,30 +55,30 @@ class RecoveryParty(threading.Thread):
             self.wakeup(msg.content[0], msg.sender, msg.content[1], msg.content[2], msg.content[3])
         if msg.description == 'zk_proof_x' and msg.sender in [1,2]:
             if msg.content[0] == 0 or msg.content[1] == 0:
-                src.general_procedures.abort()
+                PoC_DSA.src.general_procedures.abort()
             # msg.content[0] o msg.content[1] not in the group G
             elif pow(msg.content[0], self.q, self.p) != 1 or pow(msg.content[1], self.q, self.p) != 1:
-                src.general_procedures.abort()
+                PoC_DSA.src.general_procedures.abort()
             else:
                 self.other_u = msg.content[0]
                 self.other_X = msg.content[1]
                 self.c = secrets.randbelow(self.q - 1) + 1
                 if msg.sender == 1:
-                    self.queue1.put(src.utils.Message(description="zk_challenge_x", sender=self.party_id, receiver=1, content=self.c))
+                    self.queue1.put(PoC_DSA.src.utils.Message(description="zk_challenge_x", sender=self.party_id, receiver=1, content=self.c))
                 elif msg.sender == 2:
-                    self.queue2.put(src.utils.Message(description="zk_challenge_x", sender=self.party_id, receiver=2, content=self.c))
+                    self.queue2.put(PoC_DSA.src.utils.Message(description="zk_challenge_x", sender=self.party_id, receiver=2, content=self.c))
         if msg.description == 'zk_challenge_x' and msg.sender in [1,2]:
             self.other_c = msg.content
             self.z = self.zk_nonce + self.x_3 * self.other_c % self.q
             if msg.sender == 1:
-                self.queue1.put(src.utils.Message(description="zk_response_x", sender=self.party_id, receiver=1, content=self.z))
+                self.queue1.put(PoC_DSA.src.utils.Message(description="zk_response_x", sender=self.party_id, receiver=1, content=self.z))
             elif msg.sender == 2:
-                self.queue2.put(src.utils.Message(description="zk_response_x", sender=self.party_id, receiver=2, content=self.z))
+                self.queue2.put(PoC_DSA.src.utils.Message(description="zk_response_x", sender=self.party_id, receiver=2, content=self.z))
         if msg.description == 'zk_response_x' and msg.sender in [1,2]:
             if (msg.content % self.q) != 0  and pow(self.g, msg.content, self.p) == (self.other_u * pow(self.other_X, self.c, self.p)) % self.p:
                 self.signature_1()
             else:
-                src.general_procedures.abort()
+                PoC_DSA.src.general_procedures.abort()
         if (msg.description == "R_1_commitment" and msg.sender == 1) or (msg.description == "R_2_commitment" and msg.sender == 2):
             self.signature_2(msg.content)
         if (msg.description == "R_1_decommitment" and msg.sender == 1) or (msg.description == "R_2_decommitment" and msg.sender == 2):
@@ -100,10 +100,10 @@ class RecoveryParty(threading.Thread):
         enc_y_2_3, enc_y_3_2 = enc_rec_2_3
 
         # Decrypt the values using the recovery party's private key
-        y_1_3 = src.crypto_utils.decrypt_with_private_key(self.enc_private_key, enc_y_1_3)
-        y_2_3 = src.crypto_utils.decrypt_with_private_key(self.enc_private_key, enc_y_2_3)
-        y_3_1 = src.crypto_utils.decrypt_with_private_key(self.enc_private_key, enc_y_3_1)
-        y_3_2 = src.crypto_utils.decrypt_with_private_key(self.enc_private_key, enc_y_3_2)
+        y_1_3 = PoC_DSA.src.crypto_utils.decrypt_with_private_key(self.enc_private_key, enc_y_1_3)
+        y_2_3 = PoC_DSA.src.crypto_utils.decrypt_with_private_key(self.enc_private_key, enc_y_2_3)
+        y_3_1 = PoC_DSA.src.crypto_utils.decrypt_with_private_key(self.enc_private_key, enc_y_3_1)
+        y_3_2 = PoC_DSA.src.crypto_utils.decrypt_with_private_key(self.enc_private_key, enc_y_3_2)
 
         # Compute private share of public key
         a_3 = (2*y_3_1 - y_3_2) % self.q
@@ -124,10 +124,10 @@ class RecoveryParty(threading.Thread):
 
         # Send a message to the user to start the recovery signature protocol
         if user == 1:
-            message = src.utils.Message(description="start_signature", sender=self.party_id, receiver=1, content=self.message)
+            message = PoC_DSA.src.utils.Message(description="start_signature", sender=self.party_id, receiver=1, content=self.message)
             self.queue1.put(message)
         elif user == 2:
-            message = src.utils.Message(description="start_signature", sender=self.party_id, receiver=2, content=self.message)
+            message = PoC_DSA.src.utils.Message(description="start_signature", sender=self.party_id, receiver=2, content=self.message)
             self.queue2.put(message)
 
         self.zk_prove_x()
@@ -138,9 +138,9 @@ class RecoveryParty(threading.Thread):
         self.X = pow(self.g, self.x_3, self.p)
 
         if self.curr_user == 1:
-            self.queue1.put(src.utils.Message(description="zk_proof_x", sender=self.party_id, receiver=1, content=(self.u, self.X)))
+            self.queue1.put(PoC_DSA.src.utils.Message(description="zk_proof_x", sender=self.party_id, receiver=1, content=(self.u, self.X)))
         elif self.curr_user == 2:
-            self.queue2.put(src.utils.Message(description="zk_proof_x", sender=self.party_id, receiver=2, content=(self.u, self.X)))
+            self.queue2.put(PoC_DSA.src.utils.Message(description="zk_proof_x", sender=self.party_id, receiver=2, content=(self.u, self.X)))
 
     # First phase of signature
     def signature_1(self):
@@ -154,35 +154,35 @@ class RecoveryParty(threading.Thread):
         self.R_3 = pow(self.g, self.k_3, self.p)
 
         # Compute the commitment for R_1
-        R_3_commitment, R_3_decommitment = src.crypto_utils.commit_single(self.R_3, self.q)
+        R_3_commitment, R_3_decommitment = PoC_DSA.src.crypto_utils.commit_single(self.R_3, self.q)
         self.R_3_decommitment = R_3_decommitment
 
         # Send the commitment to the other user
         if self.curr_user == 2:
-            self.queue2.put(src.utils.Message(description="R_3_commitment", sender=self.party_id, receiver=2, content=R_3_commitment))
+            self.queue2.put(PoC_DSA.src.utils.Message(description="R_3_commitment", sender=self.party_id, receiver=2, content=R_3_commitment))
         elif self.curr_user == 1:
-            self.queue1.put(src.utils.Message(description="R_3_commitment", sender=self.party_id, receiver=1, content=R_3_commitment))
+            self.queue1.put(PoC_DSA.src.utils.Message(description="R_3_commitment", sender=self.party_id, receiver=1, content=R_3_commitment))
 
     # Second phase of signature protocol
     def signature_2(self, other_R_commitment):
         self.other_R_commitment = other_R_commitment
         # Send the decommitment to the other user
         if self.curr_user == 2:
-            self.queue2.put(src.utils.Message(description="R_3_decommitment", sender=self.party_id, receiver=2, content=self.R_3_decommitment))
+            self.queue2.put(PoC_DSA.src.utils.Message(description="R_3_decommitment", sender=self.party_id, receiver=2, content=self.R_3_decommitment))
         elif self.curr_user == 1:
-            self.queue1.put(src.utils.Message(description="R_3_decommitment", sender=self.party_id, receiver=1, content=self.R_3_decommitment))
+            self.queue1.put(PoC_DSA.src.utils.Message(description="R_3_decommitment", sender=self.party_id, receiver=1, content=self.R_3_decommitment))
     
     # Third phase of signature protocol
     def signature_3(self, other_R_decommitment):
         self.other_R_decommitment = other_R_decommitment
         # Verify the commitment received from the other user
-        if not src.crypto_utils.verify_commitment(self.other_R_commitment, self.other_R_decommitment):
+        if not PoC_DSA.src.crypto_utils.verify_commitment(self.other_R_commitment, self.other_R_decommitment):
             # The protocol aborts
-            src.general_procedures.abort()
+            PoC_DSA.src.general_procedures.abort()
         else:
             if self.other_R_decommitment[0] == 1:
                 # The protocol aborts if R_2=1 or R_3=1, since it would cause problems in the following computations
-                src.general_procedures.abort()
+                PoC_DSA.src.general_procedures.abort()
             self.signature_3_part2()
 
     # Second part of third phase of signature protocol
@@ -192,48 +192,48 @@ class RecoveryParty(threading.Thread):
 
         # If R=1 the protocol aborts, since it would cause problems in the following computations
         if self.R == 1:
-            src.general_procedures.abort()
+            PoC_DSA.src.general_procedures.abort()
 
         # Compute e = H(m || R) mod q
-        self.e = src.crypto_utils.hash_message(self.R, self.msg_to_sign, self.q) % self.q
+        self.e = PoC_DSA.src.crypto_utils.hash_message(self.R, self.msg_to_sign, self.q) % self.q
 
         # Compute s_3 = k_3 - e * omega_3 mod q
         self.s_3 = (self.k_3 - self.e * self.omega_3) % self.q
 
         # Compute the commitment for s_3
-        s_3_commitment, s_3_decommitment = src.crypto_utils.commit_single(self.s_3, self.q)
+        s_3_commitment, s_3_decommitment = PoC_DSA.src.crypto_utils.commit_single(self.s_3, self.q)
         self.s_3_decommitment = s_3_decommitment
 
         # Send the commitment to the other user
         if self.curr_user == 2:
-            self.queue2.put(src.utils.Message(description="s_3_commitment", sender=self.party_id, receiver=2, content=s_3_commitment))
+            self.queue2.put(PoC_DSA.src.utils.Message(description="s_3_commitment", sender=self.party_id, receiver=2, content=s_3_commitment))
         elif self.curr_user == 1:
-            self.queue1.put(src.utils.Message(description="s_3_commitment", sender=self.party_id, receiver=1, content=s_3_commitment))
+            self.queue1.put(PoC_DSA.src.utils.Message(description="s_3_commitment", sender=self.party_id, receiver=1, content=s_3_commitment))
 
     # Fourth phase of signature protocol
     def signature_4(self, other_s_commitment):
         self.other_s_commitment = other_s_commitment
         # Send s_3 decommitment to the other user
         if self.curr_user == 2:
-            self.queue2.put(src.utils.Message(description="s_3_decommitment", sender=self.party_id, receiver=2, content=self.s_3_decommitment))
+            self.queue2.put(PoC_DSA.src.utils.Message(description="s_3_decommitment", sender=self.party_id, receiver=2, content=self.s_3_decommitment))
         elif self.curr_user == 1:
-            self.queue1.put(src.utils.Message(description="s_3_decommitment", sender=self.party_id, receiver=1, content=self.s_3_decommitment))
+            self.queue1.put(PoC_DSA.src.utils.Message(description="s_3_decommitment", sender=self.party_id, receiver=1, content=self.s_3_decommitment))
 
     # Fifth phase of signature protocol
     def combine(self, other_s_decommitment):
         self.other_s_decommitment = other_s_decommitment
         # Verify the commitment received from the other user
-        if not src.crypto_utils.verify_commitment(self.other_s_commitment, other_s_decommitment):
+        if not PoC_DSA.src.crypto_utils.verify_commitment(self.other_s_commitment, other_s_decommitment):
             # The protocol aborts
-            src.general_procedures.abort()
+            PoC_DSA.src.general_procedures.abort()
         else:
             self.s = (self.s_3 + self.other_s_decommitment[0]) % self.q
             
             # Verification
             r_v = (pow(self.g, self.s, self.p) * pow(self.A, self.e, self.p)) % self.p
-            e_v = src.crypto_utils.hash_message(r_v, self.msg_to_sign, self.q) % self.q
+            e_v = PoC_DSA.src.crypto_utils.hash_message(r_v, self.msg_to_sign, self.q) % self.q
             if e_v != self.e:
-                src.general_procedures.abort()
+                PoC_DSA.src.general_procedures.abort()
             else:
                 self.signature = (self.e, self.s)
                 self.signature_completed.set()
@@ -276,17 +276,17 @@ class User1(threading.Thread):
             try:
                 msg = self.queue1.get(timeout=10)  # Wait for a message from the other user or the recovery party
                 self.processMessage(msg)  # Process the message and continue the protocol
-            except src.utils.ProtocolAbortedException as e:
+            except PoC_DSA.src.utils.ProtocolAbortedException as e:
                 self.aborted = True
                 self.running = False
                 self.keygen_completed.set()
                 self.abortExceptionQueue.put(e)  # Put the exception in the abortExceptionQueue to communicate it to the main thread
                 raise
-            except src.utils.SignatureException as e:
+            except PoC_DSA.src.utils.SignatureException as e:
                 if self.recovery:
-                    self.queue3.put(src.utils.Message(description="signature_fail", sender=self.party_id, receiver=3, content=None))  # Inform the recovery party that the signature protocol failed
+                    self.queue3.put(PoC_DSA.src.utils.Message(description="signature_fail", sender=self.party_id, receiver=3, content=None))  # Inform the recovery party that the signature protocol failed
                 else:
-                    self.queue2.put(src.utils.Message(description="signature_fail", sender=self.party_id, receiver=2, content=None))  # Inform the other user that the signature protocol failed
+                    self.queue2.put(PoC_DSA.src.utils.Message(description="signature_fail", sender=self.party_id, receiver=2, content=None))  # Inform the other user that the signature protocol failed
                 self.failedSignatureExceptionQueue.put((e, self.party_id))
                 self.signature_completed.set()                  
                 raise
@@ -299,44 +299,44 @@ class User1(threading.Thread):
             self.keygen_1()
         if msg.description == "zk_proof_x" and msg.sender == 2:
             if msg.content[0] == 0 or msg.content[1] == 0:
-                src.general_procedures.abort()
+                PoC_DSA.src.general_procedures.abort()
             # msg.content[0] o msg.content[1] not in the group G
             elif pow(msg.content[0], self.q, self.p) != 1 or pow(msg.content[1], self.q, self.p) != 1:
-                src.general_procedures.abort()
+                PoC_DSA.src.general_procedures.abort()
             else:
                 self.other_u = msg.content[0]
                 self.other_X = msg.content[1]
                 self.c = secrets.randbelow(self.q - 1) + 1
-                self.queue2.put(src.utils.Message(description="zk_challenge_x", sender=self.party_id, receiver=2, content=self.c))
+                self.queue2.put(PoC_DSA.src.utils.Message(description="zk_challenge_x", sender=self.party_id, receiver=2, content=self.c))
         if msg.description == "zk_challenge_x" and msg.sender == 2:
             self.other_c = msg.content
             self.z = self.zk_nonce + self.x_1 * self.other_c % self.q
-            self.queue2.put(src.utils.Message(description="zk_response_x", sender=self.party_id, receiver=2, content=self.z))
+            self.queue2.put(PoC_DSA.src.utils.Message(description="zk_response_x", sender=self.party_id, receiver=2, content=self.z))
         if msg.description == "zk_response_x" and msg.sender == 2:
             if (msg.content % self.q) != 0  and pow(self.g, msg.content, self.p) == (self.other_u * pow(self.other_X, self.c, self.p)) % self.p:
                 self.keygen_5_part3()
             else:
-                src.general_procedures.abort()
+                PoC_DSA.src.general_procedures.abort()
         if msg.description == "zk_proof_x" and msg.sender == 3:
             if msg.content[0] == 0 or msg.content[1] == 0:
-                src.general_procedures.abort()
+                PoC_DSA.src.general_procedures.abort()
             # msg.content[0] o msg.content[1] not in the group G
             elif pow(msg.content[0], self.q, self.p) != 1 or pow(msg.content[1], self.q, self.p) != 1:
-                src.general_procedures.abort()
+                PoC_DSA.src.general_procedures.abort()
             else:
                 self.other_u = msg.content[0]
                 self.other_X = msg.content[1]
                 self.c = secrets.randbelow(self.q - 1) + 1
-                self.queue3.put(src.utils.Message(description="zk_challenge_x", sender=self.party_id, receiver=3, content=self.c))
+                self.queue3.put(PoC_DSA.src.utils.Message(description="zk_challenge_x", sender=self.party_id, receiver=3, content=self.c))
         if msg.description == "zk_challenge_x" and msg.sender == 3:
             self.other_c = msg.content
             self.z = self.zk_nonce + self.x_1 * self.other_c % self.q
-            self.queue3.put(src.utils.Message(description="zk_response_x", sender=self.party_id, receiver=3, content=self.z))
+            self.queue3.put(PoC_DSA.src.utils.Message(description="zk_response_x", sender=self.party_id, receiver=3, content=self.z))
         if msg.description == "zk_response_x" and msg.sender == 3:
             if (msg.content % self.q) != 0  and pow(self.g, msg.content, self.p) == (self.other_u * pow(self.other_X, self.c, self.p)) % self.p:
                 self.signature_1(self.msg_content)
             else:
-                src.general_procedures.abort()
+                PoC_DSA.src.general_procedures.abort()
         if msg.description == "start_signature" and msg.sender == 0:
             self.recovery = False
             self.curr_user = 2
@@ -358,7 +358,7 @@ class User1(threading.Thread):
             self.M_2 = msg.content
             if self.M_2 == 1:
                 # The protocol aborts if M_2=1, since it would cause problems in the following computations
-                src.general_procedures.abort()
+                PoC_DSA.src.general_procedures.abort()
         if msg.description == "rec_info" and msg.sender == 2:
             y_2_1, rec_2_3 = msg.content
             self.y_2_1 = y_2_1
@@ -367,18 +367,18 @@ class User1(threading.Thread):
         if msg.description == "nizkp_proof" and msg.sender == 2:
             # Do actions
             if msg.content[0] == 0 or msg.content[3] == 0 or msg.content[4] == 0 or msg.content[7] == 0:
-                src.general_procedures.abort()
+                PoC_DSA.src.general_procedures.abort()
             # msg.content[0] o msg.content[3] o msg.content[4] o msg.content[7] not in the group G
             elif pow(msg.content[0], self.q, self.p) != 1 or pow(msg.content[3], self.q, self.p) != 1 or pow(msg.content[4], self.q, self.p) != 1 or pow(msg.content[7], self.q, self.p) != 1:
-                src.general_procedures.abort()
+                PoC_DSA.src.general_procedures.abort()
             # check z1 and z2 != mod q
             elif (msg.content[2] % self.q == 0) or (msg.content[6] % self.q == 0):
-                src.general_procedures.abort()
+                PoC_DSA.src.general_procedures.abort()
             else:
-                if msg.content[1] != src.crypto_utils.tuple_hash(self.g, self.q, msg.content[3], msg.content[0]) or msg.content[5] != src.crypto_utils.tuple_hash(self.g, self.q, msg.content[7], msg.content[4]):
-                    src.general_procedures.abort()
+                if msg.content[1] != PoC_DSA.src.crypto_utils.tuple_hash(self.g, self.q, msg.content[3], msg.content[0]) or msg.content[5] != PoC_DSA.src.crypto_utils.tuple_hash(self.g, self.q, msg.content[7], msg.content[4]):
+                    PoC_DSA.src.general_procedures.abort()
                 elif pow(self.g, msg.content[2], self.p) != (msg.content[0] * pow(msg.content[3], msg.content[1], self.p)) % self.p or pow(self.g, msg.content[6], self.p) != (msg.content[4] * pow(msg.content[7], msg.content[5], self.p)) % self.p:
-                    src.general_procedures.abort()
+                    PoC_DSA.src.general_procedures.abort()
                 else:
                     self.keygen_5_part2()
         if (msg.description == "R_2_commitment" and msg.sender == 2) or (msg.description == "R_3_commitment" and msg.sender == 3):
@@ -400,29 +400,29 @@ class User1(threading.Thread):
         self.Y_3_1 = pow(self.g, self.y_3_1, self.p)
 
         # Compute the commitments for A_1 and Y_3_1
-        A_Y_commitment, A_Y_decommitment = src.crypto_utils.commit_couple(self.A_1, self.Y_3_1, self.q)
+        A_Y_commitment, A_Y_decommitment = PoC_DSA.src.crypto_utils.commit_couple(self.A_1, self.Y_3_1, self.q)
         self.A_Y_decommitment = A_Y_decommitment
 
         # Send the commitment to the other user
-        self.queue2.put(src.utils.Message(description="A_Y_commitment", sender=self.party_id, receiver=2, content=A_Y_commitment))
+        self.queue2.put(PoC_DSA.src.utils.Message(description="A_Y_commitment", sender=self.party_id, receiver=2, content=A_Y_commitment))
         
     # Second phase of key generation
     def keygen_2(self, commitment):
         self.A_Y_other_commitment = commitment
         # Send the decommitment to the other user
-        self.queue2.put(src.utils.Message(description="A_Y_decommitment", sender=self.party_id, receiver=2, content=self.A_Y_decommitment))
+        self.queue2.put(PoC_DSA.src.utils.Message(description="A_Y_decommitment", sender=self.party_id, receiver=2, content=self.A_Y_decommitment))
         
     # Third phase of key generation
     def keygen_3(self, decommitment):
         self.A_Y_other_decommitment = decommitment
         # Verify the commitment received from the other user
-        if not src.crypto_utils.verify_commitment(self.A_Y_other_commitment, self.A_Y_other_decommitment):
+        if not PoC_DSA.src.crypto_utils.verify_commitment(self.A_Y_other_commitment, self.A_Y_other_decommitment):
             # The protocol aborts
-            src.general_procedures.abort()
+            PoC_DSA.src.general_procedures.abort()
         else:
             if self.A_Y_other_decommitment[0] == 1 or self.A_Y_other_decommitment[1] == 1:
                 # The protocol aborts if A_2=1 or Y_3_2=1, since it would cause problems in the following computations
-                src.general_procedures.abort()
+                PoC_DSA.src.general_procedures.abort()
             self.keygen_4()
 
     # Fourth phase of key generation
@@ -437,16 +437,16 @@ class User1(threading.Thread):
 
         # Publish M_1 to the other user
         M_1 = pow(self.g, self.m_1, self.p)
-        self.queue2.put(src.utils.Message(description="M_1", sender=self.party_id, receiver=2, content=M_1))
+        self.queue2.put(PoC_DSA.src.utils.Message(description="M_1", sender=self.party_id, receiver=2, content=M_1))
 
         # Encrypt y_1_3 and y_3_1 with public key
-        enc_y_1_3 = src.crypto_utils.encrypt_with_public_key(self.recovery_public_key, self.y_1_3)
-        enc_y_3_1 = src.crypto_utils.encrypt_with_public_key(self.recovery_public_key, self.y_3_1)
+        enc_y_1_3 = PoC_DSA.src.crypto_utils.encrypt_with_public_key(self.recovery_public_key, self.y_1_3)
+        enc_y_3_1 = PoC_DSA.src.crypto_utils.encrypt_with_public_key(self.recovery_public_key, self.y_3_1)
 
         self.rec_1_3 = (enc_y_1_3, enc_y_3_1)
 
         # Send y_1_j and rec_1_3 to the other user
-        self.queue2.put(src.utils.Message(description="rec_info", sender=self.party_id, receiver=2, content=(self.y_1_2, self.rec_1_3)))
+        self.queue2.put(PoC_DSA.src.utils.Message(description="rec_info", sender=self.party_id, receiver=2, content=(self.y_1_2, self.rec_1_3)))
         
     # Fifth phase of key generation
     def keygen_5(self):
@@ -456,20 +456,20 @@ class User1(threading.Thread):
         self.nizkp_nonce1 = secrets.randbelow(self.q - 1) + 1
         self.nizkp_u1 = pow(self.g, self.nizkp_nonce1, self.p)
         self.nizkp_h1 = pow(self.g, self.y_1_3, self.p)
-        self.nizkp_c1 = src.crypto_utils.tuple_hash(self.g, self.q, self.nizkp_h1, self.nizkp_u1)
+        self.nizkp_c1 = PoC_DSA.src.crypto_utils.tuple_hash(self.g, self.q, self.nizkp_h1, self.nizkp_u1)
         self.nizkp_z1 = (self.nizkp_nonce1 + self.y_1_3 * self.nizkp_c1) % self.q
 
         self.nizkp_nonce2 = secrets.randbelow(self.q - 1) + 1
         self.nizkp_u2 = pow(self.g, self.nizkp_nonce2, self.p)
         self.nizkp_h2 = pow(self.g, self.y_3_1, self.p)
-        self.nizkp_c2 = src.crypto_utils.tuple_hash(self.g, self.q, self.nizkp_h2, self.nizkp_u2)
+        self.nizkp_c2 = PoC_DSA.src.crypto_utils.tuple_hash(self.g, self.q, self.nizkp_h2, self.nizkp_u2)
         self.nizkp_z2 = (self.nizkp_nonce2 + self.y_3_1 * self.nizkp_c2) % self.q
 
-        self.queue2.put(src.utils.Message(description="nizkp_proof", sender=self.party_id, receiver=2, content=(self.nizkp_u1, self.nizkp_c1, self.nizkp_z1, self.nizkp_h1, self.nizkp_u2, self.nizkp_c2, self.nizkp_z2, self.nizkp_h2)))
+        self.queue2.put(PoC_DSA.src.utils.Message(description="nizkp_proof", sender=self.party_id, receiver=2, content=(self.nizkp_u1, self.nizkp_c1, self.nizkp_z1, self.nizkp_h1, self.nizkp_u2, self.nizkp_c2, self.nizkp_z2, self.nizkp_h2)))
 
     def keygen_5_part2(self):
         if pow(self.g, self.y_2_1, self.p) != self.A_Y_other_decommitment[0] * pow(self.M_2, 1, self.p) % self.p:
-            src.general_procedures.abort()        
+            PoC_DSA.src.general_procedures.abort()        
 
         # Generate x_1
         self.x_1 = (self.y_1_1 + self.y_2_1 + self.y_3_1) % self.q
@@ -482,9 +482,9 @@ class User1(threading.Thread):
         self.u = pow(self.g, self.zk_nonce, self.p)
         self.X = pow(self.g, self.x_1, self.p)
         if self.recovery:
-            self.queue3.put(src.utils.Message(description="zk_proof_x", sender=self.party_id, receiver=1, content=(self.u, self.X)))
+            self.queue3.put(PoC_DSA.src.utils.Message(description="zk_proof_x", sender=self.party_id, receiver=1, content=(self.u, self.X)))
         else:
-            self.queue2.put(src.utils.Message(description="zk_proof_x", sender=self.party_id, receiver=2, content=(self.u, self.X)))
+            self.queue2.put(PoC_DSA.src.utils.Message(description="zk_proof_x", sender=self.party_id, receiver=2, content=(self.u, self.X)))
 
     def keygen_5_part3(self):
         # Compute public key A
@@ -508,35 +508,35 @@ class User1(threading.Thread):
         self.R_1 = pow(self.g, self.k_1, self.p)
 
         # Compute the commitment for R_1
-        R_1_commitment, R_1_decommitment = src.crypto_utils.commit_single(self.R_1, self.q)
+        R_1_commitment, R_1_decommitment = PoC_DSA.src.crypto_utils.commit_single(self.R_1, self.q)
         self.R_1_decommitment = R_1_decommitment
 
         # Send the commitment to the other user
         if self.curr_user == 2:
-            self.queue2.put(src.utils.Message(description="R_1_commitment", sender=self.party_id, receiver=2, content=R_1_commitment))
+            self.queue2.put(PoC_DSA.src.utils.Message(description="R_1_commitment", sender=self.party_id, receiver=2, content=R_1_commitment))
         elif self.curr_user == 3:
-            self.queue3.put(src.utils.Message(description="R_1_commitment", sender=self.party_id, receiver=3, content=R_1_commitment))
+            self.queue3.put(PoC_DSA.src.utils.Message(description="R_1_commitment", sender=self.party_id, receiver=3, content=R_1_commitment))
 
     # Second phase of signature protocol
     def signature_2(self, other_R_commitment):
         self.other_R_commitment = other_R_commitment
         # Send the decommitment to the other user
         if self.curr_user == 2:
-            self.queue2.put(src.utils.Message(description="R_1_decommitment", sender=self.party_id, receiver=2, content=self.R_1_decommitment))
+            self.queue2.put(PoC_DSA.src.utils.Message(description="R_1_decommitment", sender=self.party_id, receiver=2, content=self.R_1_decommitment))
         elif self.curr_user == 3:
-            self.queue3.put(src.utils.Message(description="R_1_decommitment", sender=self.party_id, receiver=3, content=self.R_1_decommitment))
+            self.queue3.put(PoC_DSA.src.utils.Message(description="R_1_decommitment", sender=self.party_id, receiver=3, content=self.R_1_decommitment))
 
     # Third phase of signature protocol
     def signature_3(self, other_R_decommitment):
         self.other_R_decommitment = other_R_decommitment
         # Verify the commitment received from the other user
-        if not src.crypto_utils.verify_commitment(self.other_R_commitment, self.other_R_decommitment):
+        if not PoC_DSA.src.crypto_utils.verify_commitment(self.other_R_commitment, self.other_R_decommitment):
             # The protocol aborts
-            src.general_procedures.abort()
+            PoC_DSA.src.general_procedures.abort()
         else:
             if self.other_R_decommitment[0] == 1:
                 # The protocol aborts if R_2=1 or R_3=1, since it would cause problems in the following computations
-                src.general_procedures.abort()
+                PoC_DSA.src.general_procedures.abort()
             self.signature_3_part2()
     
     # Second part of third phase of signature protocol
@@ -546,10 +546,10 @@ class User1(threading.Thread):
 
         # If R=1 the protocol aborts, since it would cause problems in the following computations
         if self.R == 1:
-            src.general_procedures.abort()
+            PoC_DSA.src.general_procedures.abort()
 
         # Compute e = H(m || R) mod q
-        self.e = src.crypto_utils.hash_message(self.R, self.msg_to_sign, self.q) % self.q
+        self.e = PoC_DSA.src.crypto_utils.hash_message(self.R, self.msg_to_sign, self.q) % self.q
 
         # Compute s_1 = k_1 - e * omega_1 mod q
         if self.recovery:
@@ -558,39 +558,39 @@ class User1(threading.Thread):
             self.s_1 = (self.k_1 - self.e * self.omega_1) % self.q
 
         # Compute the commitment for s_1
-        s_1_commitment, s_1_decommitment = src.crypto_utils.commit_single(self.s_1, self.q)
+        s_1_commitment, s_1_decommitment = PoC_DSA.src.crypto_utils.commit_single(self.s_1, self.q)
         self.s_1_decommitment = s_1_decommitment
 
         # Send the commitment to the other user
         if self.curr_user == 2:
-            self.queue2.put(src.utils.Message(description="s_1_commitment", sender=self.party_id, receiver=2, content=s_1_commitment))
+            self.queue2.put(PoC_DSA.src.utils.Message(description="s_1_commitment", sender=self.party_id, receiver=2, content=s_1_commitment))
         elif self.curr_user == 3:
-            self.queue3.put(src.utils.Message(description="s_1_commitment", sender=self.party_id, receiver=3, content=s_1_commitment))
+            self.queue3.put(PoC_DSA.src.utils.Message(description="s_1_commitment", sender=self.party_id, receiver=3, content=s_1_commitment))
 
     # Fourth phase of signature protocol
     def signature_4(self, other_s_commitment):
         self.other_s_commitment = other_s_commitment
         # Send s_1 decommitment to the other user
         if self.curr_user == 2:
-            self.queue2.put(src.utils.Message(description="s_1_decommitment", sender=self.party_id, receiver=2, content=self.s_1_decommitment))
+            self.queue2.put(PoC_DSA.src.utils.Message(description="s_1_decommitment", sender=self.party_id, receiver=2, content=self.s_1_decommitment))
         elif self.curr_user == 3:
-            self.queue3.put(src.utils.Message(description="s_1_decommitment", sender=self.party_id, receiver=3, content=self.s_1_decommitment))
+            self.queue3.put(PoC_DSA.src.utils.Message(description="s_1_decommitment", sender=self.party_id, receiver=3, content=self.s_1_decommitment))
 
     # Fifth phase of signature protocol
     def combine(self, other_s_decommitment):
         self.other_s_decommitment = other_s_decommitment
         # Verify the commitment received from the other user
-        if not src.crypto_utils.verify_commitment(self.other_s_commitment, other_s_decommitment):
+        if not PoC_DSA.src.crypto_utils.verify_commitment(self.other_s_commitment, other_s_decommitment):
             # The protocol aborts
-            src.general_procedures.abort()
+            PoC_DSA.src.general_procedures.abort()
         else:
             self.s = (self.s_1 + self.other_s_decommitment[0]) % self.q
             
             # Verification
             r_v = (pow(self.g, self.s, self.p) * pow(self.A, self.e, self.p)) % self.p
-            e_v = src.crypto_utils.hash_message(r_v, self.msg_to_sign, self.q) % self.q
+            e_v = PoC_DSA.src.crypto_utils.hash_message(r_v, self.msg_to_sign, self.q) % self.q
             if e_v != self.e:
-                src.general_procedures.abort()
+                PoC_DSA.src.general_procedures.abort()
             else:
                 self.signature = (self.e, self.s)
                 self.signature_completed.set()
@@ -601,7 +601,7 @@ class User1(threading.Thread):
         self.msg_to_sign = msg
 
         # Send a message to the recovery party to wake it up and start the recovery signature protocol
-        self.queue3.put(src.utils.Message(description="wakeup", sender=self.party_id, receiver=3, content=(self.msg_to_sign, self.A, self.rec_1_3, self.rec_2_3)))
+        self.queue3.put(PoC_DSA.src.utils.Message(description="wakeup", sender=self.party_id, receiver=3, content=(self.msg_to_sign, self.A, self.rec_1_3, self.rec_2_3)))
 
         self.omega_1_tilde = (3 * self.omega_1) * pow(4, -1, self.q) % self.q  # omega_1_tilde = (3/4)*omega_1 mod q
 
@@ -644,17 +644,17 @@ class User2(threading.Thread):
             try:
                 msg = self.queue2.get(timeout=10)  # Wait for a message from the other user or the recovery party
                 self.processMessage(msg)  # Process the message and continue the protocol
-            except src.utils.ProtocolAbortedException as e:
+            except PoC_DSA.src.utils.ProtocolAbortedException as e:
                 self.aborted = True
                 self.running = False
                 self.keygen_completed.set()
                 self.abortExceptionQueue.put(e)  # Put the exception in the abortExceptionQueue to communicate it to the main thread
                 raise
-            except src.utils.SignatureException as e:
+            except PoC_DSA.src.utils.SignatureException as e:
                 if self.recovery:
-                    self.queue3.put(src.utils.Message(description="signature_fail", sender=self.party_id, receiver=3, content=None))  # Inform the recovery party that the signature protocol failed
+                    self.queue3.put(PoC_DSA.src.utils.Message(description="signature_fail", sender=self.party_id, receiver=3, content=None))  # Inform the recovery party that the signature protocol failed
                 else:
-                    self.queue1.put(src.utils.Message(description="signature_fail", sender=self.party_id, receiver=1, content=None))  # Inform the other user that the signature protocol failed
+                    self.queue1.put(PoC_DSA.src.utils.Message(description="signature_fail", sender=self.party_id, receiver=1, content=None))  # Inform the other user that the signature protocol failed
                 self.failedSignatureExceptionQueue.put((e, self.party_id))  # Put the exception and the guilty party id 
                 self.signature_completed.set()
                 raise
@@ -667,44 +667,44 @@ class User2(threading.Thread):
             self.keygen_1()
         if msg.description == "zk_proof_x" and msg.sender == 1:
             if msg.content[0] == 0 or msg.content[1] == 0:
-                src.general_procedures.abort()
+                PoC_DSA.src.general_procedures.abort()
             # msg.content[0] o msg.content[1] not in the group G
             elif pow(msg.content[0], self.q, self.p) != 1 or pow(msg.content[1], self.q, self.p) != 1:
-                src.general_procedures.abort()
+                PoC_DSA.src.general_procedures.abort()
             else:
                 self.other_u = msg.content[0]
                 self.other_X = msg.content[1]
                 self.c = secrets.randbelow(self.q - 1) + 1
-                self.queue1.put(src.utils.Message(description="zk_challenge_x", sender=self.party_id, receiver=1, content=self.c))
+                self.queue1.put(PoC_DSA.src.utils.Message(description="zk_challenge_x", sender=self.party_id, receiver=1, content=self.c))
         if msg.description == "zk_challenge_x" and msg.sender == 1:
             self.other_c = msg.content
             self.z = self.zk_nonce + self.x_2 * self.other_c % self.q
-            self.queue1.put(src.utils.Message(description="zk_response_x", sender=self.party_id, receiver=1, content=self.z))
+            self.queue1.put(PoC_DSA.src.utils.Message(description="zk_response_x", sender=self.party_id, receiver=1, content=self.z))
         if msg.description == "zk_response_x" and msg.sender == 1:
             if (msg.content % self.q) != 0  and pow(self.g, msg.content, self.p) == (self.other_u * pow(self.other_X, self.c, self.p)) % self.p:
                 self.keygen_5_part3()
             else:
-                src.general_procedures.abort()
+                PoC_DSA.src.general_procedures.abort()
         if msg.description == "zk_proof_x" and msg.sender == 3:
             if msg.content[0] == 0 or msg.content[1] == 0:
-                src.general_procedures.abort()
+                PoC_DSA.src.general_procedures.abort()
             # msg.content[0] o msg.content[1] not in the group G
             elif pow(msg.content[0], self.q, self.p) != 1 or pow(msg.content[1], self.q, self.p) != 1:
-                src.general_procedures.abort()
+                PoC_DSA.src.general_procedures.abort()
             else:
                 self.other_u = msg.content[0]
                 self.other_X = msg.content[1]
                 self.c = secrets.randbelow(self.q - 1) + 1
-                self.queue3.put(src.utils.Message(description="zk_challenge_x", sender=self.party_id, receiver=3, content=self.c))
+                self.queue3.put(PoC_DSA.src.utils.Message(description="zk_challenge_x", sender=self.party_id, receiver=3, content=self.c))
         if msg.description == "zk_challenge_x" and msg.sender == 3:
             self.other_c = msg.content
             self.z = self.zk_nonce + self.x_2 * self.other_c % self.q
-            self.queue3.put(src.utils.Message(description="zk_response_x", sender=self.party_id, receiver=3, content=self.z))
+            self.queue3.put(PoC_DSA.src.utils.Message(description="zk_response_x", sender=self.party_id, receiver=3, content=self.z))
         if msg.description == "zk_response_x" and msg.sender == 3:
             if (msg.content % self.q) != 0  and pow(self.g, msg.content, self.p) == (self.other_u * pow(self.other_X, self.c, self.p)) % self.p:
                 self.signature_1(self.msg_content)
             else:
-                src.general_procedures.abort()
+                PoC_DSA.src.general_procedures.abort()
         if msg.description == "start_signature" and msg.sender == 0:
             self.recovery = False
             self.curr_user = 1
@@ -726,7 +726,7 @@ class User2(threading.Thread):
             self.M_1 = msg.content
             if self.M_1 == 1:
                 # The protocol aborts if M_1=1, since it would cause problems in the following computations
-                src.general_procedures.abort()
+                PoC_DSA.src.general_procedures.abort()
         if msg.description == "rec_info" and msg.sender == 1:
             y_1_2, rec_1_3 = msg.content
             self.y_1_2 = y_1_2
@@ -735,17 +735,17 @@ class User2(threading.Thread):
         if msg.description == "nizkp_proof" and msg.sender == 1:
             # Do actions
             if msg.content[0] == 0 or msg.content[3] == 0 or msg.content[4] == 0 or msg.content[7] == 0:
-                src.general_procedures.abort()
+                PoC_DSA.src.general_procedures.abort()
             # msg.content[0] o msg.content[3] o msg.content[4] o msg.content[7] not in the group G
             elif pow(msg.content[0], self.q, self.p) != 1 or pow(msg.content[3], self.q, self.p) != 1 or pow(msg.content[4], self.q, self.p) != 1 or pow(msg.content[7], self.q, self.p) != 1:
-                src.general_procedures.abort()
+                PoC_DSA.src.general_procedures.abort()
             elif msg.content[2] == 0 or msg.content[6] == 0:
-                src.general_procedures.abort()
+                PoC_DSA.src.general_procedures.abort()
             else:
-                if msg.content[1] != src.crypto_utils.tuple_hash(self.g, self.q, msg.content[3], msg.content[0]) or msg.content[5] != src.crypto_utils.tuple_hash(self.g, self.q, msg.content[7], msg.content[4]):
-                    src.general_procedures.abort()
+                if msg.content[1] != PoC_DSA.src.crypto_utils.tuple_hash(self.g, self.q, msg.content[3], msg.content[0]) or msg.content[5] != PoC_DSA.src.crypto_utils.tuple_hash(self.g, self.q, msg.content[7], msg.content[4]):
+                    PoC_DSA.src.general_procedures.abort()
                 elif pow(self.g, msg.content[2], self.p) != (msg.content[0] * pow(msg.content[3], msg.content[1], self.p)) % self.p or pow(self.g, msg.content[6], self.p) != (msg.content[4] * pow(msg.content[7], msg.content[5], self.p)) % self.p:
-                    src.general_procedures.abort()
+                    PoC_DSA.src.general_procedures.abort()
                 else:
                     self.keygen_5_part2()
         if (msg.description == "R_1_commitment" and msg.sender == 1) or (msg.description == "R_3_commitment" and msg.sender == 3):
@@ -767,29 +767,29 @@ class User2(threading.Thread):
         self.Y_3_2 = pow(self.g, self.y_3_2, self.p)
 
         # Compute the commitments for A_2 and Y_3_2
-        A_Y_commitment, A_Y_decommitment = src.crypto_utils.commit_couple(self.A_2, self.Y_3_2, self.q)
+        A_Y_commitment, A_Y_decommitment = PoC_DSA.src.crypto_utils.commit_couple(self.A_2, self.Y_3_2, self.q)
         self.A_Y_decommitment = A_Y_decommitment
 
         # Send the commitment to the other user
-        self.queue1.put(src.utils.Message(description="A_Y_commitment", sender=self.party_id, receiver=1, content=A_Y_commitment))
+        self.queue1.put(PoC_DSA.src.utils.Message(description="A_Y_commitment", sender=self.party_id, receiver=1, content=A_Y_commitment))
         
     # Second phase of key generation
     def keygen_2(self, commitment):
         self.A_Y_other_commitment = commitment
         # Send the decommitment to the other user
-        self.queue1.put(src.utils.Message(description="A_Y_decommitment", sender=self.party_id, receiver=1, content=self.A_Y_decommitment))
+        self.queue1.put(PoC_DSA.src.utils.Message(description="A_Y_decommitment", sender=self.party_id, receiver=1, content=self.A_Y_decommitment))
 
     # Third phase of key generation
     def keygen_3(self, decommitment):
         self.A_Y_other_decommitment = decommitment
         # Verify the commitment received from the other user
-        if not src.crypto_utils.verify_commitment(self.A_Y_other_commitment, decommitment):
+        if not PoC_DSA.src.crypto_utils.verify_commitment(self.A_Y_other_commitment, decommitment):
             # The protocol aborts
-            src.general_procedures.abort()
+            PoC_DSA.src.general_procedures.abort()
         else:
             if self.A_Y_other_decommitment[0] == 1 or self.A_Y_other_decommitment[1] == 1:
                 # The protocol aborts if A_1=1 or Y_3_1=1, since it would cause problems in the following computations
-                src.general_procedures.abort()
+                PoC_DSA.src.general_procedures.abort()
             self.keygen_4()
 
     # Fourth phase of key generation
@@ -805,17 +805,17 @@ class User2(threading.Thread):
 
         # Publish M_2 to the other user
         M_2 = pow(self.g, self.m_2, self.p)
-        self.queue1.put(src.utils.Message(description="M_2", sender=self.party_id, receiver=1, content=M_2))
+        self.queue1.put(PoC_DSA.src.utils.Message(description="M_2", sender=self.party_id, receiver=1, content=M_2))
 
         # Encrypt y_2_3 and y_3_2 with public key
-        enc_y_2_3 = src.crypto_utils.encrypt_with_public_key(self.recovery_public_key, self.y_2_3)
-        enc_y_3_2 = src.crypto_utils.encrypt_with_public_key(self.recovery_public_key, self.y_3_2)
+        enc_y_2_3 = PoC_DSA.src.crypto_utils.encrypt_with_public_key(self.recovery_public_key, self.y_2_3)
+        enc_y_3_2 = PoC_DSA.src.crypto_utils.encrypt_with_public_key(self.recovery_public_key, self.y_3_2)
 
         self.rec_2_3 = (enc_y_2_3, enc_y_3_2)
 
         # Send y_2_1 and rec_2_3 to the other user
         # MISSING TODO: Add NIZKP
-        self.queue1.put(src.utils.Message(description="rec_info", sender=self.party_id, receiver=1, content=(self.y_2_1, self.rec_2_3)))
+        self.queue1.put(PoC_DSA.src.utils.Message(description="rec_info", sender=self.party_id, receiver=1, content=(self.y_2_1, self.rec_2_3)))
         
     # Fifth phase of key generation
     def keygen_5(self):
@@ -825,20 +825,20 @@ class User2(threading.Thread):
         self.nizkp_nonce1 = secrets.randbelow(self.q - 1) + 1
         self.nizkp_u1 = pow(self.g, self.nizkp_nonce1, self.p)
         self.nizkp_h1 = pow(self.g, self.y_2_3, self.p)
-        self.nizkp_c1 = src.crypto_utils.tuple_hash(self.g, self.q, self.nizkp_h1, self.nizkp_u1)
+        self.nizkp_c1 = PoC_DSA.src.crypto_utils.tuple_hash(self.g, self.q, self.nizkp_h1, self.nizkp_u1)
         self.nizkp_z1 = (self.nizkp_nonce1 + self.y_2_3 * self.nizkp_c1) % self.q
 
         self.nizkp_nonce2 = secrets.randbelow(self.q - 1) + 1
         self.nizkp_u2 = pow(self.g, self.nizkp_nonce2, self.p)
         self.nizkp_h2 = pow(self.g, self.y_3_2, self.p)
-        self.nizkp_c2 = src.crypto_utils.tuple_hash(self.g, self.q, self.nizkp_h2, self.nizkp_u2)
+        self.nizkp_c2 = PoC_DSA.src.crypto_utils.tuple_hash(self.g, self.q, self.nizkp_h2, self.nizkp_u2)
         self.nizkp_z2 = (self.nizkp_nonce2 + self.y_3_2 * self.nizkp_c2) % self.q
 
-        self.queue1.put(src.utils.Message(description="nizkp_proof", sender=self.party_id, receiver=1, content=(self.nizkp_u1, self.nizkp_c1, self.nizkp_z1, self.nizkp_h1, self.nizkp_u2, self.nizkp_c2, self.nizkp_z2, self.nizkp_h2)))
+        self.queue1.put(PoC_DSA.src.utils.Message(description="nizkp_proof", sender=self.party_id, receiver=1, content=(self.nizkp_u1, self.nizkp_c1, self.nizkp_z1, self.nizkp_h1, self.nizkp_u2, self.nizkp_c2, self.nizkp_z2, self.nizkp_h2)))
 
     def keygen_5_part2(self):
         if pow(self.g, self.y_1_2, self.p) != self.A_Y_other_decommitment[0] * pow(self.M_1, 2, self.p) % self.p:
-            src.general_procedures.abort()        
+            PoC_DSA.src.general_procedures.abort()        
 
         # Generate x_2
         self.x_2 = (self.y_1_2 + self.y_2_2 + self.y_3_2) % self.q
@@ -851,9 +851,9 @@ class User2(threading.Thread):
         self.u = pow(self.g, self.zk_nonce, self.p)
         self.X = pow(self.g, self.x_2, self.p)
         if self.recovery:
-            self.queue3.put(src.utils.Message(description="zk_proof_x", sender=self.party_id, receiver=1, content=(self.u, self.X)))
+            self.queue3.put(PoC_DSA.src.utils.Message(description="zk_proof_x", sender=self.party_id, receiver=1, content=(self.u, self.X)))
         else:
-            self.queue1.put(src.utils.Message(description="zk_proof_x", sender=self.party_id, receiver=1, content=(self.u, self.X)))
+            self.queue1.put(PoC_DSA.src.utils.Message(description="zk_proof_x", sender=self.party_id, receiver=1, content=(self.u, self.X)))
 
     def keygen_5_part3(self):
         # Compute public key A
@@ -877,35 +877,35 @@ class User2(threading.Thread):
         self.R_2 = pow(self.g, self.k_2, self.p)
 
         # Compute the commitment for R_2
-        R_2_commitment, R_2_decommitment = src.crypto_utils.commit_single(self.R_2, self.q)
+        R_2_commitment, R_2_decommitment = PoC_DSA.src.crypto_utils.commit_single(self.R_2, self.q)
         self.R_2_decommitment = R_2_decommitment
 
         # Send the commitment to the other user
         if self.curr_user == 1:
-            self.queue1.put(src.utils.Message(description="R_2_commitment", sender=self.party_id, receiver=1, content=R_2_commitment))
+            self.queue1.put(PoC_DSA.src.utils.Message(description="R_2_commitment", sender=self.party_id, receiver=1, content=R_2_commitment))
         elif self.curr_user == 3:
-            self.queue3.put(src.utils.Message(description="R_2_commitment", sender=self.party_id, receiver=3, content=R_2_commitment))
+            self.queue3.put(PoC_DSA.src.utils.Message(description="R_2_commitment", sender=self.party_id, receiver=3, content=R_2_commitment))
 
     # Second phase of signature protocol
     def signature_2(self, other_R_commitment):
         self.other_R_commitment = other_R_commitment
         # Send the decommitment to the other user
         if self.curr_user == 1:
-            self.queue1.put(src.utils.Message(description="R_2_decommitment", sender=self.party_id, receiver=1, content=self.R_2_decommitment))
+            self.queue1.put(PoC_DSA.src.utils.Message(description="R_2_decommitment", sender=self.party_id, receiver=1, content=self.R_2_decommitment))
         elif self.curr_user == 3:
-            self.queue3.put(src.utils.Message(description="R_2_decommitment", sender=self.party_id, receiver=3, content=self.R_2_decommitment))
+            self.queue3.put(PoC_DSA.src.utils.Message(description="R_2_decommitment", sender=self.party_id, receiver=3, content=self.R_2_decommitment))
 
     # Third phase of signature protocol
     def signature_3(self, other_R_decommitment):
         self.other_R_decommitment = other_R_decommitment
         # Verify the commitment received from the other user
-        if not src.crypto_utils.verify_commitment(self.other_R_commitment, other_R_decommitment):
+        if not PoC_DSA.src.crypto_utils.verify_commitment(self.other_R_commitment, other_R_decommitment):
             # The protocol aborts
-            src.general_procedures.abort()
+            PoC_DSA.src.general_procedures.abort()
         else:
             if self.other_R_decommitment[0] == 1:
                 # The protocol aborts if R_1=1, since it would cause problems in the following computations
-                src.general_procedures.abort()
+                PoC_DSA.src.general_procedures.abort()
             self.signature_3_part2()
 
     # Continuation of third phase of signature protocol
@@ -915,10 +915,10 @@ class User2(threading.Thread):
 
         # If R=1, the signature would be invalid, so the protocol aborts
         if self.R == 1:
-            src.general_procedures.abort()
+            PoC_DSA.src.general_procedures.abort()
 
         # Compute e = H(m || R)
-        self.e = src.crypto_utils.hash_message(self.R, self.msg_to_sign, self.q) % self.q
+        self.e = PoC_DSA.src.crypto_utils.hash_message(self.R, self.msg_to_sign, self.q) % self.q
 
         # Compute s_2 = k_2 - e*omega_2 mod q
         if self.recovery:
@@ -927,39 +927,39 @@ class User2(threading.Thread):
             self.s_2 = (self.k_2 - self.e * self.omega_2) % self.q
 
         # Compute s_2 commitment
-        s_2_commitment, s_2_decommitment = src.crypto_utils.commit_single(self.s_2, self.q)
+        s_2_commitment, s_2_decommitment = PoC_DSA.src.crypto_utils.commit_single(self.s_2, self.q)
         self.s_2_decommitment = s_2_decommitment
 
         # Send s_2 commitment to the other user
         if self.curr_user == 1:
-            self.queue1.put(src.utils.Message(description="s_2_commitment", sender=self.party_id, receiver=1, content=s_2_commitment))
+            self.queue1.put(PoC_DSA.src.utils.Message(description="s_2_commitment", sender=self.party_id, receiver=1, content=s_2_commitment))
         elif self.curr_user == 3:
-            self.queue3.put(src.utils.Message(description="s_2_commitment", sender=self.party_id, receiver=3, content=s_2_commitment))
+            self.queue3.put(PoC_DSA.src.utils.Message(description="s_2_commitment", sender=self.party_id, receiver=3, content=s_2_commitment))
 
     # Fourth phase of signature protocol
     def signature_4(self, other_s_commitment):
         self.other_s_commitment = other_s_commitment
         # Send s_2 decommitment to the other user
         if self.curr_user == 1:
-            self.queue1.put(src.utils.Message(description="s_2_decommitment", sender=self.party_id, receiver=1, content=self.s_2_decommitment))
+            self.queue1.put(PoC_DSA.src.utils.Message(description="s_2_decommitment", sender=self.party_id, receiver=1, content=self.s_2_decommitment))
         elif self.curr_user == 3:
-            self.queue3.put(src.utils.Message(description="s_2_decommitment", sender=self.party_id, receiver=3, content=self.s_2_decommitment))
+            self.queue3.put(PoC_DSA.src.utils.Message(description="s_2_decommitment", sender=self.party_id, receiver=3, content=self.s_2_decommitment))
 
     # Fifth phase of signature protocol
     def combine(self, other_s_decommitment):
         self.other_s_decommitment = other_s_decommitment
         # Verify the commitment received from the other user
-        if not src.crypto_utils.verify_commitment(self.other_s_commitment, other_s_decommitment):
+        if not PoC_DSA.src.crypto_utils.verify_commitment(self.other_s_commitment, other_s_decommitment):
             # The protocol aborts
-            src.general_procedures.abort()
+            PoC_DSA.src.general_procedures.abort()
         else:
             self.s = (self.s_2 + self.other_s_decommitment[0]) % self.q
             
             # Verification
             r_v = (pow(self.g, self.s, self.p) * pow(self.A, self.e, self.p)) % self.p
-            e_v = src.crypto_utils.hash_message(r_v, self.msg_to_sign, self.q) % self.q
+            e_v = PoC_DSA.src.crypto_utils.hash_message(r_v, self.msg_to_sign, self.q) % self.q
             if e_v != self.e:
-                src.general_procedures.abort()
+                PoC_DSA.src.general_procedures.abort()
             else:
                 self.signature = (self.e, self.s)
                 self.signature_completed.set()
@@ -970,7 +970,7 @@ class User2(threading.Thread):
         self.msg_to_sign = msg
 
         # Send a message to the recovery party to wake it up and start the recovery signature protocol
-        self.queue3.put(src.utils.Message(description="wakeup", sender=self.party_id, receiver=3, content=(self.msg_to_sign, self.A, self.rec_1_3, self.rec_2_3)))
+        self.queue3.put(PoC_DSA.src.utils.Message(description="wakeup", sender=self.party_id, receiver=3, content=(self.msg_to_sign, self.A, self.rec_1_3, self.rec_2_3)))
 
         self.omega_2_tilde = - (3 * self.omega_2)
 

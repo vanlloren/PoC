@@ -1,18 +1,18 @@
 # This file contains the main function that simulates the correct functioning of the protocol.
 # The analysis of robustness against malicious adversaries is done in the test files.
 
-import src.entities
-import src.crypto_utils
-import src.general_procedures
-from src.general_procedures import abort
-from src.utils import ProtocolAbortedException
+import PoC_DSA.src.entities
+import PoC_DSA.src.crypto_utils
+import PoC_DSA.src.general_procedures
+from PoC_DSA.src.general_procedures import abort
+from PoC_DSA.src.utils import ProtocolAbortedException
 import queue
 
 def main():
     # Initialize the protocol, perform key generation and get the recovery party and the users
     try:
-        recovery, user1, user2, abortExceptionQueue, failedSignatureExceptionQueue = src.general_procedures.initialize_protocol()
-        success = src.general_procedures.begin_keygen_protocol(user1, user2)
+        recovery, user1, user2, abortExceptionQueue, failedSignatureExceptionQueue = PoC_DSA.src.general_procedures.initialize_protocol()
+        success = PoC_DSA.src.general_procedures.begin_keygen_protocol(user1, user2)
 
         try:
             # Check if any of the threads has put an exception in the abortExceptionQueue
@@ -28,7 +28,7 @@ def main():
 
 
         # Now simulation of an ordinary signature
-        src.general_procedures.sign(user1, user2, "This is a message to be signed.", failedSignatureExceptionQueue, abortExceptionQueue)
+        PoC_DSA.src.general_procedures.sign(user1, user2, "This is a message to be signed.", failedSignatureExceptionQueue, abortExceptionQueue)
         try:
             # Check if any of the threads has put an exception in the failedSignatureExceptionQueue
             exc, guilty = failedSignatureExceptionQueue.get_nowait()
@@ -37,7 +37,7 @@ def main():
             pass
 
         # Another signature, to show that the protocol can be used multiple times with the same keys
-        src.general_procedures.sign(user1, user2, "This is another message to be signed.", failedSignatureExceptionQueue, abortExceptionQueue)
+        PoC_DSA.src.general_procedures.sign(user1, user2, "This is another message to be signed.", failedSignatureExceptionQueue, abortExceptionQueue)
         try:
             # Check if any of the threads has put an exception in the abortExceptionQueue
             exc, guilty = failedSignatureExceptionQueue.get_nowait()
@@ -46,7 +46,7 @@ def main():
             pass
 
         # Perform a recovery signature, for example if user2 has lost his keys
-        src.general_procedures.recoverySign(user1, recovery, "Sign this message", failedSignatureExceptionQueue, abortExceptionQueue)
+        PoC_DSA.src.general_procedures.recoverySign(user1, recovery, "Sign this message", failedSignatureExceptionQueue, abortExceptionQueue)
         try:
             # Check if any of the threads has put an exception in the abortExceptionQueue
             exc, guilty = failedSignatureExceptionQueue.get_nowait()
@@ -54,7 +54,7 @@ def main():
         except queue.Empty:
             pass
 
-        src.general_procedures.recoverySign(user2, recovery, "Sign this message", failedSignatureExceptionQueue, abortExceptionQueue)
+        PoC_DSA.src.general_procedures.recoverySign(user2, recovery, "Sign this message", failedSignatureExceptionQueue, abortExceptionQueue)
         try:
             # Check if any of the threads has put an exception in the abortExceptionQueue
             exc, guilty = failedSignatureExceptionQueue.get_nowait()
@@ -62,7 +62,7 @@ def main():
         except queue.Empty:
             pass
 
-        src.general_procedures.recoverySign(user1, recovery, "Sign this message again", failedSignatureExceptionQueue, abortExceptionQueue)
+        PoC_DSA.src.general_procedures.recoverySign(user1, recovery, "Sign this message again", failedSignatureExceptionQueue, abortExceptionQueue)
         try:
             # Check if any of the threads has put an exception in the abortExceptionQueue
             exc, guilty = failedSignatureExceptionQueue.get_nowait()

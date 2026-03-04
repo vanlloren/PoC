@@ -1,13 +1,13 @@
 import pytest
-import src.main
-from src.entities import User1, User2, RecoveryParty
-from src.utils import ProtocolAbortedException, SignatureException
+import PoC_DSA.src.main
+from PoC_DSA.src.entities import User1, User2, RecoveryParty
+from PoC_DSA.src.utils import ProtocolAbortedException, SignatureException
 
 # This test checks if the key generation protocol runs without errors
 def test_keygen_protocol_runs_without_errors():
     try:
-        src.main.main()
-    except src.utils.ProtocolAbortedException as e:
+        PoC_DSA.src.main.main()
+    except PoC_DSA.src.utils.ProtocolAbortedException as e:
         pytest.fail(f"Protocol aborted unexpectedly: {e}")   
 
 
@@ -17,8 +17,8 @@ def test_keygen_protocol_runs_without_errors():
 # To run this test, ensure the main function does not terminate the threads.
 def test_signature_correctness():
     try:
-        src.main.main()
-    except src.utils.ProtocolAbortedException as e:
+        PoC_DSA.src.main.main()
+    except PoC_DSA.src.utils.ProtocolAbortedException as e:
         pytest.fail(f"Protocol aborted unexpectedly: {e}")   
 
         # Verify that both users computed the same signature (e, S)

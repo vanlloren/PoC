@@ -3,8 +3,8 @@
 
 import pytest
 import unittest.mock as mock
-import src.entities
-import src.main
+import PoC_DSA.src.entities
+import PoC_DSA.src.main
 import queue
 import secrets
 
@@ -18,16 +18,16 @@ def test_keygen_abort_on_wrong_decommitment_p2():
         decommitment = (decommitment[0], (decommitment[1] + 1) % self.q)
 
         # Verify the commitment received from the other user
-        if not src.crypto_utils.verify_commitment(self.A_Y_other_commitment, decommitment):
+        if not PoC_DSA.src.crypto_utils.verify_commitment(self.A_Y_other_commitment, decommitment):
             # The protocol aborts
-            src.general_procedures.abort()
+            PoC_DSA.src.general_procedures.abort()
         else:
             self.keygen_4()
 
-    with mock.patch.object(src.entities.User2, 'keygen_3', mock_keygen_3_wrong_decommitment):
+    with mock.patch.object(PoC_DSA.src.entities.User2, 'keygen_3', mock_keygen_3_wrong_decommitment):
         try:
-            src.main.main()
-        except src.utils.ProtocolAbortedException:
+            PoC_DSA.src.main.main()
+        except PoC_DSA.src.utils.ProtocolAbortedException:
             assert True  # Protocol should be aborted
         else:
             pytest.fail("Protocol did not abort on wrong decommitment from player 2")
@@ -41,16 +41,16 @@ def test_keygen_abort_on_wrong_decommitment_p1():
         decommitment = (decommitment[0], (decommitment[1] + 1) % self.q)
 
         # Verify the commitment received from the other user
-        if not src.crypto_utils.verify_commitment(self.A_Y_other_commitment, decommitment):
+        if not PoC_DSA.src.crypto_utils.verify_commitment(self.A_Y_other_commitment, decommitment):
             # The protocol aborts
-            src.general_procedures.abort()
+            PoC_DSA.src.general_procedures.abort()
         else:
             self.keygen_4()
 
-    with mock.patch.object(src.entities.User1, 'keygen_3', mock_keygen_3_wrong_decommitment):
+    with mock.patch.object(PoC_DSA.src.entities.User1, 'keygen_3', mock_keygen_3_wrong_decommitment):
         try:
-            src.main.main()
-        except src.utils.ProtocolAbortedException:
+            PoC_DSA.src.main.main()
+        except PoC_DSA.src.utils.ProtocolAbortedException:
             assert True  # Protocol should be aborted
         else:
             pytest.fail("Protocol did not abort on wrong decommitment from player 1")
@@ -65,12 +65,12 @@ def test_keygen_abort_on_wrong_commitment_p1():
         self.A_Y_other_commitment = (self.A_Y_other_commitment[0], (self.A_Y_other_commitment[1] + 1) % self.q)
 
         # Send the decommitment to the other user
-        self.queue1.put(src.utils.Message(description="A_Y_decommitment", sender=self.party_id, receiver=1, content=self.A_Y_decommitment))
+        self.queue1.put(PoC_DSA.src.utils.Message(description="A_Y_decommitment", sender=self.party_id, receiver=1, content=self.A_Y_decommitment))
 
-    with mock.patch.object(src.entities.User2, 'keygen_2', mock_keygen_2_wrong_commitment):
+    with mock.patch.object(PoC_DSA.src.entities.User2, 'keygen_2', mock_keygen_2_wrong_commitment):
         try:
-            src.main.main()
-        except src.utils.ProtocolAbortedException:
+            PoC_DSA.src.main.main()
+        except PoC_DSA.src.utils.ProtocolAbortedException:
             assert True  # Protocol should be aborted
         else:
             pytest.fail("Protocol did not abort on wrong commitment from player 2")
@@ -84,12 +84,12 @@ def test_keygen_abort_on_wrong_commitment_p2():
         self.A_Y_other_commitment = (self.A_Y_other_commitment[0], (self.A_Y_other_commitment[1] + 1) % self.q)
 
         # Send the decommitment to the other user
-        self.queue2.put(src.utils.Message(description="A_Y_decommitment", sender=self.party_id, receiver=0, content=self.A_Y_decommitment))
+        self.queue2.put(PoC_DSA.src.utils.Message(description="A_Y_decommitment", sender=self.party_id, receiver=0, content=self.A_Y_decommitment))
 
-    with mock.patch.object(src.entities.User1, 'keygen_2', mock_keygen_2_wrong_commitment):
+    with mock.patch.object(PoC_DSA.src.entities.User1, 'keygen_2', mock_keygen_2_wrong_commitment):
         try:
-            src.main.main()
-        except src.utils.ProtocolAbortedException:
+            PoC_DSA.src.main.main()
+        except PoC_DSA.src.utils.ProtocolAbortedException:
             assert True  # Protocol should be aborted
         else:
             pytest.fail("Protocol did not abort on wrong commitment from player 1")
@@ -110,23 +110,23 @@ def test_keygen_abort_on_wrong_check_p2():
 
         # Add 1 to M_1 to make it wrong
         M_1 = (M_1 + 1) % self.p
-        self.queue2.put(src.utils.Message(description="M_1", sender=self.party_id, receiver=2, content=M_1))
+        self.queue2.put(PoC_DSA.src.utils.Message(description="M_1", sender=self.party_id, receiver=2, content=M_1))
 
         # Encrypt y_1_3 and y_3_1 with public key
-        enc_y_1_3 = src.crypto_utils.encrypt_with_public_key(self.recovery_public_key, self.y_1_3)
-        enc_y_3_1 = src.crypto_utils.encrypt_with_public_key(self.recovery_public_key, self.y_3_1)
+        enc_y_1_3 = PoC_DSA.src.crypto_utils.encrypt_with_public_key(self.recovery_public_key, self.y_1_3)
+        enc_y_3_1 = PoC_DSA.src.crypto_utils.encrypt_with_public_key(self.recovery_public_key, self.y_3_1)
 
         self.rec_1_3 = (enc_y_1_3, enc_y_3_1)
 
         # Send y_1_j and rec_1_3 to the other user
         # MISSING TODO: Add NIZKP
-        self.queue2.put(src.utils.Message(description="rec_info", sender=self.party_id, receiver=2, content=(self.y_1_2, self.rec_1_3)))
+        self.queue2.put(PoC_DSA.src.utils.Message(description="rec_info", sender=self.party_id, receiver=2, content=(self.y_1_2, self.rec_1_3)))
         
 
-    with mock.patch.object(src.entities.User1, 'keygen_4', mock_keygen_4_wrong_check):
+    with mock.patch.object(PoC_DSA.src.entities.User1, 'keygen_4', mock_keygen_4_wrong_check):
         try:
-            src.main.main()
-        except src.utils.ProtocolAbortedException:
+            PoC_DSA.src.main.main()
+        except PoC_DSA.src.utils.ProtocolAbortedException:
             assert True  # Protocol should be aborted
         else:
             pytest.fail("Protocol did not abort on wrong M_1 from player 1")
@@ -148,22 +148,22 @@ def test_keygen_abort_on_wrong_check_p1():
 
         # Add 1 to M_2 to make it wrong
         M_2 = (M_2 + 1) % self.p
-        self.queue1.put(src.utils.Message(description="M_2", sender=self.party_id, receiver=1, content=M_2))
+        self.queue1.put(PoC_DSA.src.utils.Message(description="M_2", sender=self.party_id, receiver=1, content=M_2))
 
         # Encrypt y_2_3 and y_3_2 with public key
-        enc_y_2_3 = src.crypto_utils.encrypt_with_public_key(self.recovery_public_key, self.y_2_3)
-        enc_y_3_2 = src.crypto_utils.encrypt_with_public_key(self.recovery_public_key, self.y_3_2)
+        enc_y_2_3 = PoC_DSA.src.crypto_utils.encrypt_with_public_key(self.recovery_public_key, self.y_2_3)
+        enc_y_3_2 = PoC_DSA.src.crypto_utils.encrypt_with_public_key(self.recovery_public_key, self.y_3_2)
 
         self.rec_2_3 = (enc_y_2_3, enc_y_3_2)
 
         # Send y_2_1 and rec_2_3 to the other user
         # MISSING TODO: Add NIZKP
-        self.queue1.put(src.utils.Message(description="rec_info", sender=self.party_id, receiver=1, content=(self.y_2_1, self.rec_2_3)))
+        self.queue1.put(PoC_DSA.src.utils.Message(description="rec_info", sender=self.party_id, receiver=1, content=(self.y_2_1, self.rec_2_3)))
 
-    with mock.patch.object(src.entities.User2, 'keygen_4', mock_keygen_4_wrong_check):
+    with mock.patch.object(PoC_DSA.src.entities.User2, 'keygen_4', mock_keygen_4_wrong_check):
         try:
-            src.main.main()
-        except src.utils.ProtocolAbortedException:
+            PoC_DSA.src.main.main()
+        except PoC_DSA.src.utils.ProtocolAbortedException:
             assert True  # Protocol should be aborted
         else:
             pytest.fail("Protocol did not abort on wrong M_2 from player 2")
@@ -209,7 +209,7 @@ def test_keygen_abort_on_wrong_y_1_2():
         # Add 1 to y_1_2 to make it wrong
         self.y_1_2 = (self.y_1_2 + 1) % self.q
         if pow(self.g, self.y_1_2, self.p) != self.A_Y_other_decommitment[0] * pow(self.M_1, 1, self.p) % self.p:
-            src.general_procedures.abort()        
+            PoC_DSA.src.general_procedures.abort()        
 
         # Generate x_2
         self.x_2 = (self.y_1_2 + self.y_2_2 + self.y_3_2) % self.q
@@ -225,10 +225,10 @@ def test_keygen_abort_on_wrong_y_1_2():
 
         self.keygen_completed.set()
 
-    with mock.patch.object(src.entities.User2, 'keygen_5', mock_keygen_5_wrong_y_1_2):
+    with mock.patch.object(PoC_DSA.src.entities.User2, 'keygen_5', mock_keygen_5_wrong_y_1_2):
         try:
-            src.main.main()
-        except src.utils.ProtocolAbortedException:
+            PoC_DSA.src.main.main()
+        except PoC_DSA.src.utils.ProtocolAbortedException:
             assert True  # Protocol should be aborted
         else:
             pytest.fail("Protocol did not abort on wrong y_{i}_{j} from player 2")
@@ -252,13 +252,13 @@ def test_keygen_abort_on_A_2_equal_1():
         self.A_Y_decommitment = A_Y_decommitment
 
         # Send the commitment to the other user
-        self.queue1.put(src.utils.Message(description="A_Y_commitment", sender=self.party_id, receiver=1, content=A_Y_commitment))
+        self.queue1.put(PoC_DSA.src.utils.Message(description="A_Y_commitment", sender=self.party_id, receiver=1, content=A_Y_commitment))
         
 
-    with mock.patch.object(src.entities.User2, 'keygen_1', mock_keygen_1_A_2_equal_1):
+    with mock.patch.object(PoC_DSA.src.entities.User2, 'keygen_1', mock_keygen_1_A_2_equal_1):
         try:
-            src.main.main()
-        except src.utils.ProtocolAbortedException:
+            PoC_DSA.src.main.main()
+        except PoC_DSA.src.utils.ProtocolAbortedException:
             assert True  # Protocol should be aborted
         else:
             pytest.fail("Protocol did not abort on A_2 equal to 1")
@@ -282,13 +282,13 @@ def test_keygen_abort_on_A_1_equal_1():
         self.A_Y_decommitment = A_Y_decommitment
 
         # Send the commitment to the other user
-        self.queue2.put(src.utils.Message(description="A_Y_commitment", sender=self.party_id, receiver=2, content=A_Y_commitment))
+        self.queue2.put(PoC_DSA.src.utils.Message(description="A_Y_commitment", sender=self.party_id, receiver=2, content=A_Y_commitment))
         
 
-    with mock.patch.object(src.entities.User1, 'keygen_1', mock_keygen_1_A_1_equal_1):
+    with mock.patch.object(PoC_DSA.src.entities.User1, 'keygen_1', mock_keygen_1_A_1_equal_1):
         try:
-            src.main.main()
-        except src.utils.ProtocolAbortedException:
+            PoC_DSA.src.main.main()
+        except PoC_DSA.src.utils.ProtocolAbortedException:
             assert True  # Protocol should be aborted
         else:
             pytest.fail("Protocol did not abort on A_1 equal to 1")
@@ -312,13 +312,13 @@ def test_keygen_abort_on_Y_3_2_equal_1():
         self.A_Y_decommitment = A_Y_decommitment
 
         # Send the commitment to the other user
-        self.queue1.put(src.utils.Message(description="A_Y_commitment", sender=self.party_id, receiver=1, content=A_Y_commitment))
+        self.queue1.put(PoC_DSA.src.utils.Message(description="A_Y_commitment", sender=self.party_id, receiver=1, content=A_Y_commitment))
         
 
-    with mock.patch.object(src.entities.User2, 'keygen_1', mock_keygen_1_Y_3_2_equal_1):
+    with mock.patch.object(PoC_DSA.src.entities.User2, 'keygen_1', mock_keygen_1_Y_3_2_equal_1):
         try:
-            src.main.main()
-        except src.utils.ProtocolAbortedException:
+            PoC_DSA.src.main.main()
+        except PoC_DSA.src.utils.ProtocolAbortedException:
             assert True  # Protocol should be aborted
         else:
             pytest.fail("Protocol did not abort on Y_3_2 equal to 1")
@@ -340,13 +340,13 @@ def test_keygen_abort_on_Y_3_1_equal_1():
         self.A_Y_decommitment = A_Y_decommitment
 
         # Send the commitment to the other user
-        self.queue2.put(src.utils.Message(description="A_Y_commitment", sender=self.party_id, receiver=2, content=A_Y_commitment))
+        self.queue2.put(PoC_DSA.src.utils.Message(description="A_Y_commitment", sender=self.party_id, receiver=2, content=A_Y_commitment))
         
 
-    with mock.patch.object(src.entities.User1, 'keygen_1', mock_keygen_1_Y_3_1_equal_1):
+    with mock.patch.object(PoC_DSA.src.entities.User1, 'keygen_1', mock_keygen_1_Y_3_1_equal_1):
         try:
-            src.main.main()
-        except src.utils.ProtocolAbortedException:
+            PoC_DSA.src.main.main()
+        except PoC_DSA.src.utils.ProtocolAbortedException:
             assert True  # Protocol should be aborted
         else:
             pytest.fail("Protocol did not abort on Y_3_1 equal to 1")
@@ -366,22 +366,22 @@ def test_keygen_abort_on_M_2_equal_1():
         # Publish M_2 to the other user
         M_2 = pow(self.g, self.m_2, self.p)
         M_2 = 1  # Set M_2 to 1 to make it wrong
-        self.queue1.put(src.utils.Message(description="M_2", sender=self.party_id, receiver=1, content=M_2))
+        self.queue1.put(PoC_DSA.src.utils.Message(description="M_2", sender=self.party_id, receiver=1, content=M_2))
 
         # Encrypt y_2_3 and y_3_2 with public key
-        enc_y_2_3 = src.crypto_utils.encrypt_with_public_key(self.recovery_public_key, self.y_2_3)
-        enc_y_3_2 = src.crypto_utils.encrypt_with_public_key(self.recovery_public_key, self.y_3_2)
+        enc_y_2_3 = PoC_DSA.src.crypto_utils.encrypt_with_public_key(self.recovery_public_key, self.y_2_3)
+        enc_y_3_2 = PoC_DSA.src.crypto_utils.encrypt_with_public_key(self.recovery_public_key, self.y_3_2)
 
         self.rec_2_3 = (enc_y_2_3, enc_y_3_2)
 
         # Send y_2_1 and rec_2_3 to the other user
         # MISSING TODO: Add NIZKP
-        self.queue1.put(src.utils.Message(description="rec_info", sender=self.party_id, receiver=1, content=(self.y_2_1, self.rec_2_3)))
+        self.queue1.put(PoC_DSA.src.utils.Message(description="rec_info", sender=self.party_id, receiver=1, content=(self.y_2_1, self.rec_2_3)))
 
-    with mock.patch.object(src.entities.User2, 'keygen_4', mock_keygen_4_M_2_equal_1):
+    with mock.patch.object(PoC_DSA.src.entities.User2, 'keygen_4', mock_keygen_4_M_2_equal_1):
         try:
-            src.main.main()
-        except src.utils.ProtocolAbortedException:
+            PoC_DSA.src.main.main()
+        except PoC_DSA.src.utils.ProtocolAbortedException:
             assert True  # Protocol should be aborted
         else:
             pytest.fail("Protocol did not abort on M_2 equal to 1")
@@ -400,22 +400,22 @@ def test_keygen_abort_on_M_1_equal_1():
         # Publish M_1 to the other user
         M_1 = pow(self.g, self.m_1, self.p)
         M_1 = 1  # Set M_1 to 1 to make it wrong
-        self.queue2.put(src.utils.Message(description="M_1", sender=self.party_id, receiver=2, content=M_1))
+        self.queue2.put(PoC_DSA.src.utils.Message(description="M_1", sender=self.party_id, receiver=2, content=M_1))
 
         # Encrypt y_1_3 and y_3_1 with public key
-        enc_y_1_3 = src.crypto_utils.encrypt_with_public_key(self.recovery_public_key, self.y_1_3)
-        enc_y_3_1 = src.crypto_utils.encrypt_with_public_key(self.recovery_public_key, self.y_3_1)
+        enc_y_1_3 = PoC_DSA.src.crypto_utils.encrypt_with_public_key(self.recovery_public_key, self.y_1_3)
+        enc_y_3_1 = PoC_DSA.src.crypto_utils.encrypt_with_public_key(self.recovery_public_key, self.y_3_1)
 
         self.rec_1_3 = (enc_y_1_3, enc_y_3_1)
 
         # Send y_1_j and rec_1_3 to the other user
         # MISSING TODO: Add NIZKP
-        self.queue2.put(src.utils.Message(description="rec_info", sender=self.party_id, receiver=2, content=(self.y_1_2, self.rec_1_3)))
+        self.queue2.put(PoC_DSA.src.utils.Message(description="rec_info", sender=self.party_id, receiver=2, content=(self.y_1_2, self.rec_1_3)))
 
-    with mock.patch.object(src.entities.User1, 'keygen_4', mock_keygen_4_M_1_equal_1):
+    with mock.patch.object(PoC_DSA.src.entities.User1, 'keygen_4', mock_keygen_4_M_1_equal_1):
         try:
-            src.main.main()
-        except src.utils.ProtocolAbortedException:
+            PoC_DSA.src.main.main()
+        except PoC_DSA.src.utils.ProtocolAbortedException:
             assert True  # Protocol should be aborted
         else:
             pytest.fail("Protocol did not abort on M_1 equal to 1")

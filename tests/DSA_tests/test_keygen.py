@@ -1,14 +1,14 @@
 import pytest
-import src.main
-import src.general_procedures
-import src.utils
+import PoC_DSA.src.main
+import PoC_DSA.src.general_procedures
+import PoC_DSA.src.utils
 import queue
 
 # This test checks that the initalization and key generation procedures work correctly without coding errors or aborting
 def test_keygen_working():
     try:
-        src.main.main()
-    except src.utils.ProtocolAbortedException as e:
+        PoC_DSA.src.main.main()
+    except PoC_DSA.src.utils.ProtocolAbortedException as e:
         pytest.fail(f"Protocol aborted unexpectedly: {e}")   
 
 
@@ -17,8 +17,8 @@ def test_keygen_working():
 # This test checks if the two users compute the same value of A
 def test_keygen_correct_publickey_generation():
     try:
-        recovery, user1, user2, exceptionQueue, failedSignatureExceptionQueue = src.general_procedures.initialize_protocol()
-        success = src.general_procedures.begin_keygen_protocol(user1, user2)
+        recovery, user1, user2, exceptionQueue, failedSignatureExceptionQueue = PoC_DSA.src.general_procedures.initialize_protocol()
+        success = PoC_DSA.src.general_procedures.begin_keygen_protocol(user1, user2)
 
         try:
             exc = exceptionQueue.get_nowait()
@@ -45,7 +45,7 @@ def test_keygen_correct_publickey_generation():
         assert user2.A_2 != 1, "A_2 is 1"
         assert user1.A_3 != 1, "A_3 is 1"
 
-    except src.utils.ProtocolAbortedException as e:
+    except PoC_DSA.src.utils.ProtocolAbortedException as e:
         pytest.fail(f"Protocol aborted unexpectedly: {e}")
     finally:
         recovery.running = False
@@ -55,8 +55,8 @@ def test_keygen_correct_publickey_generation():
 # This test checks the correctness of other values in key generation phase
 def test_keygen_correctness_of_other_values():
     try:
-        recovery, user1, user2, exceptionQueue, failedSignatureExceptionQueue = src.general_procedures.initialize_protocol()
-        success = src.general_procedures.begin_keygen_protocol(user1, user2)
+        recovery, user1, user2, exceptionQueue, failedSignatureExceptionQueue = PoC_DSA.src.general_procedures.initialize_protocol()
+        success = PoC_DSA.src.general_procedures.begin_keygen_protocol(user1, user2)
 
         try:
             exc = exceptionQueue.get_nowait()
@@ -77,7 +77,7 @@ def test_keygen_correctness_of_other_values():
         expected_omega_sum = (user1.a_1 + user2.a_2 + 2 * user1.y_3_1 - user2.y_3_2) % user1.q
         assert omega_sum == expected_omega_sum, "The sum of omega_1 and omega_2 is not consistent with the expected value based on a_1, a_2, y_3_1 and y_3_2"
 
-    except src.utils.ProtocolAbortedException as e:
+    except PoC_DSA.src.utils.ProtocolAbortedException as e:
         pytest.fail(f"Protocol aborted unexpectedly: {e}")
     finally:
         recovery.running = False

@@ -1,7 +1,7 @@
 import pytest
 import secrets
 import hashlib
-from src.crypto_utils import hash_message, generate_schnorr_group
+from PoC_DSA.src.crypto_utils import hash_message, generate_schnorr_group
 
 # Hash done using SHA256, truncated to 128 bits for security, and reduced modulo q
 # No need to test for hash properties, just that the function behaves as expected
