@@ -30,3 +30,6 @@ def is_infinity(P):
 
 def negate_point(P):
     return -P
+
+def point_at_infinity():
+    return ellipticcurve.INFINITY
