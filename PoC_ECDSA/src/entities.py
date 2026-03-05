@@ -193,7 +193,7 @@ class RecoveryParty(threading.Thread):
         # Compute R = R_3 + R_other 
         self.R = curves_utils.point_add(self.R_3, self.other_R)
 
-        # If R=1 the protocol aborts, since it would cause problems in the following computations
+        # If R=point at infinity, the protocol aborts, since it would cause problems in the following computations
         if curves_utils.is_infinity(self.R):
             PoC_ECDSA.src.general_procedures.abort()
 
