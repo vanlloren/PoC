@@ -27,7 +27,7 @@ def initialize_protocol():
     recovery_party.set_communication_queues(queue1, queue2, queue3, abortExceptionQueue)
 
     # Generate elliptic curve parameters for the protocol
-    G, p, n = PoC_ECDSA.src.crypto_utils.generate_elliptic_curve()
+    G, p, n, name = PoC_ECDSA.src.crypto_utils.generate_elliptic_curve()
 
     # Set the curve parameters for all the parties
     recovery_party.set_curve_parameters(G, p, n)
