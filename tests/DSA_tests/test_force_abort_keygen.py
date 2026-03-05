@@ -176,7 +176,7 @@ def test_keygen_abort_on_wrong_y_2_1():
         # Add 1 to y_2_1 to make it wrong
         self.y_2_1 = (self.y_2_1 + 1) % self.q
         if pow(self.g, self.y_2_1, self.p) != self.A_Y_other_decommitment[0] * pow(self.M_2, 1, self.p) % self.p:
-            src.general_procedures.abort()        
+            PoC_DSA.src.general_procedures.abort()        
 
         # Generate x_1
         self.x_1 = (self.y_1_1 + self.y_2_1 + self.y_3_1) % self.q
@@ -193,10 +193,10 @@ def test_keygen_abort_on_wrong_y_2_1():
 
         self.keygen_completed.set()
 
-    with mock.patch.object(src.entities.User1, 'keygen_5', mock_keygen_5_wrong_y_2_1):
+    with mock.patch.object(PoC_DSA.src.entities.User1, 'keygen_5', mock_keygen_5_wrong_y_2_1):
         try:
-            src.main.main()
-        except src.utils.ProtocolAbortedException:
+            PoC_DSA.src.main.main()
+        except PoC_DSA.src.utils.ProtocolAbortedException:
             assert True  # Protocol should be aborted
         else:
             pytest.fail("Protocol did not abort on wrong y_{i}_{j} from player 1")
@@ -248,7 +248,7 @@ def test_keygen_abort_on_A_2_equal_1():
         self.Y_3_2 = pow(self.g, self.y_3_2, self.p)
 
         # Compute the commitments for A_2 and Y_3_2
-        A_Y_commitment, A_Y_decommitment = src.crypto_utils.commit_couple(self.A_2, self.Y_3_2, self.q)
+        A_Y_commitment, A_Y_decommitment = PoC_DSA.src.crypto_utils.commit_couple(self.A_2, self.Y_3_2, self.q)
         self.A_Y_decommitment = A_Y_decommitment
 
         # Send the commitment to the other user
@@ -278,7 +278,7 @@ def test_keygen_abort_on_A_1_equal_1():
         self.Y_3_1 = pow(self.g, self.y_3_1, self.p)
 
         # Compute the commitments for A_1 and Y_3_1
-        A_Y_commitment, A_Y_decommitment = src.crypto_utils.commit_couple(self.A_1, self.Y_3_1, self.q)
+        A_Y_commitment, A_Y_decommitment = PoC_DSA.src.crypto_utils.commit_couple(self.A_1, self.Y_3_1, self.q)
         self.A_Y_decommitment = A_Y_decommitment
 
         # Send the commitment to the other user
@@ -308,7 +308,7 @@ def test_keygen_abort_on_Y_3_2_equal_1():
         self.Y_3_2 = 1
 
         # Compute the commitments for A_2 and Y_3_2
-        A_Y_commitment, A_Y_decommitment = src.crypto_utils.commit_couple(self.A_2, self.Y_3_2, self.q)
+        A_Y_commitment, A_Y_decommitment = PoC_DSA.src.crypto_utils.commit_couple(self.A_2, self.Y_3_2, self.q)
         self.A_Y_decommitment = A_Y_decommitment
 
         # Send the commitment to the other user
@@ -336,7 +336,7 @@ def test_keygen_abort_on_Y_3_1_equal_1():
         self.Y_3_1 = 1
 
         # Compute the commitments for A_1 and Y_3_1
-        A_Y_commitment, A_Y_decommitment = src.crypto_utils.commit_couple(self.A_1, self.Y_3_1, self.q)
+        A_Y_commitment, A_Y_decommitment = PoC_DSA.src.crypto_utils.commit_couple(self.A_1, self.Y_3_1, self.q)
         self.A_Y_decommitment = A_Y_decommitment
 
         # Send the commitment to the other user
