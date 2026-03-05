@@ -16,8 +16,9 @@ def generate_elliptic_curve():
     g = curve.generator     # generating point G (x, y) (the g of the DSA-like scheme)
     p = curve.curve.p()     # field prime p (the p of the DSA-like scheme)    
     n = curve.order         # generator order n (the q of the DSA-like scheme)
+    name = curve.name           # curve name
 
-    return g, p, n
+    return g, p, n, name
 
 # Returns a SHA256 hash of the message combined with the nonce (r), truncated to 128 bits for security
 # Takes as parameters a 256-bit nonce (the x-coordinate of the nonce point), a message
