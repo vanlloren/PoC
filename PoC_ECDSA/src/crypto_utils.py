@@ -41,7 +41,7 @@ def hash_message(nonce, message, q):
     combined = nonce_bytes + message_bytes
     
     # Hash the combined bytes using SHA-256
-    hash_digest = hashlib.sha256(combined).digest()
+    hash_digest = hashlib.shake_256(combined).digest(32)
 
     # Truncate the hash for 128-bit security
     truncated_hash = hash_digest[:16] 
@@ -117,7 +117,7 @@ def commit_single_point(point, q):
     value_bytes = x_bytes + y_bytes # Total 512 bits (64 bytes)
 
     hash_input = value_bytes + nonce_bytes
-    commitment = hashlib.sha256(hash_input).digest()
+    commitment = hashlib.shake_256(hash_input).digest(32)
 
     return commitment, (x, y, nonce)
 
@@ -138,7 +138,7 @@ def commit_couple_point(point1, point2, q):
     value2_bytes = x2.to_bytes(32, byteorder='big') + y2.to_bytes(32, byteorder='big')
 
     hash_input = value1_bytes + value2_bytes + nonce_bytes
-    commitment = hashlib.sha256(hash_input).digest()    
+    commitment = hashlib.shake_256(hash_input).digest(32)    
 
     return commitment, (x1, y1, x2, y2, nonce)
 
@@ -158,7 +158,7 @@ def verify_commitment_point(commitment, decommitment):
     else:
         raise ValueError("Invalid decommitment format")
 
-    expected_commitment = hashlib.sha256(hash_input).digest()
+    expected_commitment = hashlib.shake_256(hash_input).digest(32)
     
     if expected_commitment == commitment:
         return True
@@ -176,7 +176,7 @@ def commit_single(value1, q):
     value_bytes = value1.to_bytes(384, byteorder='big')
 
     hash_input = value_bytes + nonce_bytes
-    commitment = hashlib.sha256(hash_input).digest()    
+    commitment = hashlib.shake_256(hash_input).digest(32)    
 
     return commitment, (value1, nonce)
 
@@ -192,7 +192,7 @@ def commit_couple(value1, value2, q):
     value2_bytes = value2.to_bytes(384, byteorder='big')
 
     hash_input = value1_bytes + value2_bytes + nonce_bytes
-    commitment = hashlib.sha256(hash_input).digest()    
+    commitment = hashlib.shake_256(hash_input).digest(32)    
 
     return commitment, (value1, value2, nonce)
 
@@ -212,7 +212,7 @@ def verify_commitment(commitment, decommitment):
     else:
         raise ValueError("Invalid decommitment format")
 
-    expected_commitment = hashlib.sha256(hash_input).digest()
+    expected_commitment = hashlib.shake_256(hash_input).digest(32)
     
     if expected_commitment == commitment:
         return True
