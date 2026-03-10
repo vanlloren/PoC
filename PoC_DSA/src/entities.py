@@ -62,7 +62,11 @@ class RecoveryParty(threading.Thread):
             else:
                 self.other_u = msg.content[0]
                 self.other_X = msg.content[1]
-                self.c = secrets.randbelow(self.q - 1) + 1
+                # Generate c until its not 0
+                while True:
+                    self.c = secrets.randbelow(self.q)
+                    if self.c != 0:
+                        break
                 if msg.sender == 1:
                     self.queue1.put(PoC_DSA.src.utils.Message(description="zk_challenge_x", sender=self.party_id, receiver=1, content=self.c))
                 elif msg.sender == 2:
@@ -133,7 +137,12 @@ class RecoveryParty(threading.Thread):
         self.zk_prove_x()
     
     def zk_prove_x(self):
-        self.zk_nonce = secrets.randbelow(self.q -1) + 1
+        # generate the nonce until its different than 0, 1 and q-1
+        while True:
+            self.zk_nonce = secrets.randbelow(self.q)
+            if self.zk_nonce != 0 and self.zk_nonce != 1 and self.zk_nonce != self.q - 1:
+                break        
+
         self.u = pow(self.g, self.zk_nonce, self.p)
         self.X = pow(self.g, self.x_3, self.p)
 
@@ -147,13 +156,16 @@ class RecoveryParty(threading.Thread):
          # Save the message to be signed
         self.msg_to_sign = self.message
 
-        # Generate k_1
-        self.k_3 = secrets.randbelow(self.q - 1) + 1
+        # Generate k_3
+        while True:
+            self.k_3 = secrets.randbelow(self.q)
+            if self.k_3 != 0 and self.k_3 != 1 and self.k_3 != self.q - 1:
+                break
 
-        # Compute R_1 = g^k_1 mod p
+        # Compute R_3 = g^k_3 mod p
         self.R_3 = pow(self.g, self.k_3, self.p)
 
-        # Compute the commitment for R_1
+        # Compute the commitment for R_3
         R_3_commitment, R_3_decommitment = PoC_DSA.src.crypto_utils.commit_single(self.R_3, self.q)
         self.R_3_decommitment = R_3_decommitment
 
@@ -180,8 +192,8 @@ class RecoveryParty(threading.Thread):
             # The protocol aborts
             PoC_DSA.src.general_procedures.abort()
         else:
-            if self.other_R_decommitment[0] == 1:
-                # The protocol aborts if R_2=1 or R_3=1, since it would cause problems in the following computations
+            if self.other_R_decommitment[0] == 1 or self.other_R_decommitment[0] == self.g:
+                # The protocol aborts if R_2=1 or R_2=g or R_3=1 or R_3=g, since it would cause problems in the following computations
                 PoC_DSA.src.general_procedures.abort()
             self.signature_3_part2()
 
@@ -190,8 +202,8 @@ class RecoveryParty(threading.Thread):
         # Compute R = R_3 * R_other mod p
         self.R = (self.R_3 * self.other_R_decommitment[0]) % self.p
 
-        # If R=1 the protocol aborts, since it would cause problems in the following computations
-        if self.R == 1:
+        # If R=1 or R=g, the protocol aborts, since it would cause problems in the following computations
+        if self.R == 1 or self.R == self.g:
             PoC_DSA.src.general_procedures.abort()
 
         # Compute e = H(m || R) mod q
@@ -306,7 +318,11 @@ class User1(threading.Thread):
             else:
                 self.other_u = msg.content[0]
                 self.other_X = msg.content[1]
-                self.c = secrets.randbelow(self.q - 1) + 1
+                # Generate c until its not 0
+                while True:
+                    self.c = secrets.randbelow(self.q)
+                    if self.c != 0:
+                        break
                 self.queue2.put(PoC_DSA.src.utils.Message(description="zk_challenge_x", sender=self.party_id, receiver=2, content=self.c))
         if msg.description == "zk_challenge_x" and msg.sender == 2:
             self.other_c = msg.content
@@ -326,7 +342,10 @@ class User1(threading.Thread):
             else:
                 self.other_u = msg.content[0]
                 self.other_X = msg.content[1]
-                self.c = secrets.randbelow(self.q - 1) + 1
+                while True:
+                    self.c = secrets.randbelow(self.q)
+                    if self.c != 0:
+                        break
                 self.queue3.put(PoC_DSA.src.utils.Message(description="zk_challenge_x", sender=self.party_id, receiver=3, content=self.c))
         if msg.description == "zk_challenge_x" and msg.sender == 3:
             self.other_c = msg.content
@@ -356,8 +375,8 @@ class User1(threading.Thread):
             self.keygen_3(msg.content)
         if msg.description == "M_2" and msg.sender == 2:
             self.M_2 = msg.content
-            if self.M_2 == 1:
-                # The protocol aborts if M_2=1, since it would cause problems in the following computations
+            if self.M_2 == 1 or self.M_2 == self.g:
+                # The protocol aborts if M_2=1 or M_2=g, since it would cause problems in the following computations
                 PoC_DSA.src.general_procedures.abort()
         if msg.description == "rec_info" and msg.sender == 2:
             y_2_1, rec_2_3 = msg.content
@@ -392,9 +411,12 @@ class User1(threading.Thread):
 
     # First phase of key generation
     def keygen_1(self):
-        self.a_1 = secrets.randbelow(self.q - 1) + 1  # a_1 must be different from 0 to avoid A_1=1
-        self.y_3_1 = secrets.randbelow(self.q - 1) + 1  # y_3_1 must be different from 0 to avoid Y_3_1=1
-        self.m_1 = secrets.randbelow(self.q - 1) + 1  # m_1 must be different from 0 to avoid M_1=1
+        while True:
+            self.a_1 = secrets.randbelow(self.q)   # a_1 must be different from 0, 1 or q-1 
+            self.y_3_1 = secrets.randbelow(self.q)  # y_3_1 must be different from 0, 1 or q-1
+            self.m_1 = secrets.randbelow(self.q)  # m_1 must be different from 0, 1 or q-1 
+            if self.a_1 != 0 and self.a_1 != 1 and self.a_1 != self.q - 1 and self.y_3_1 != 0 and self.y_3_1 != 1 and self.y_3_1 != self.q - 1 and self.m_1 != 0 and self.m_1 != 1 and self.m_1 != self.q - 1:
+                break            
 
         self.A_1 = pow(self.g, self.a_1, self.p)
         self.Y_3_1 = pow(self.g, self.y_3_1, self.p)
@@ -420,8 +442,8 @@ class User1(threading.Thread):
             # The protocol aborts
             PoC_DSA.src.general_procedures.abort()
         else:
-            if self.A_Y_other_decommitment[0] == 1 or self.A_Y_other_decommitment[1] == 1:
-                # The protocol aborts if A_2=1 or Y_3_2=1, since it would cause problems in the following computations
+            if self.A_Y_other_decommitment[0] == 1 or self.A_Y_other_decommitment[0] == self.g or self.A_Y_other_decommitment[1] == 1 or self.A_Y_other_decommitment[1] == self.g:
+                # The protocol aborts if A_2=1 or A_2=g or Y_3_2=1 or Y_3_2=g, since it would cause problems in the following computations
                 PoC_DSA.src.general_procedures.abort()
             self.keygen_4()
 
@@ -453,13 +475,18 @@ class User1(threading.Thread):
         self.nizkp_prove()
 
     def nizkp_prove(self):
-        self.nizkp_nonce1 = secrets.randbelow(self.q - 1) + 1
+        # The nonce must be different from 0, 1 and q-1 to avoid problems in the following computations
+        while True:
+            self.nizkp_nonce1 = secrets.randbelow(self.q) 
+            self.nizkp_nonce2 = secrets.randbelow(self.q) 
+            if self.nizkp_nonce1 != 0 and self.nizkp_nonce1 != 1 and self.nizkp_nonce1 != self.q - 1 and self.nizkp_nonce2 != 0 and self.nizkp_nonce2 != 1 and self.nizkp_nonce2 != self.q - 1:
+                break
+
         self.nizkp_u1 = pow(self.g, self.nizkp_nonce1, self.p)
         self.nizkp_h1 = pow(self.g, self.y_1_3, self.p)
         self.nizkp_c1 = PoC_DSA.src.crypto_utils.tuple_hash(self.g, self.q, self.nizkp_h1, self.nizkp_u1)
         self.nizkp_z1 = (self.nizkp_nonce1 + self.y_1_3 * self.nizkp_c1) % self.q
-
-        self.nizkp_nonce2 = secrets.randbelow(self.q - 1) + 1
+        
         self.nizkp_u2 = pow(self.g, self.nizkp_nonce2, self.p)
         self.nizkp_h2 = pow(self.g, self.y_3_1, self.p)
         self.nizkp_c2 = PoC_DSA.src.crypto_utils.tuple_hash(self.g, self.q, self.nizkp_h2, self.nizkp_u2)
@@ -478,7 +505,12 @@ class User1(threading.Thread):
         self.zk_prove_x()
 
     def zk_prove_x(self):
-        self.zk_nonce = secrets.randbelow(self.q -1) + 1
+        # The nonce must be different from 0, 1 and q-1 to avoid problems in the following computations
+        while True:
+            self.zk_nonce = secrets.randbelow(self.q)
+            if self.zk_nonce != 0 and self.zk_nonce != 1 and self.zk_nonce != self.q - 1:
+                break
+
         self.u = pow(self.g, self.zk_nonce, self.p)
         self.X = pow(self.g, self.x_1, self.p)
         if self.recovery:
@@ -502,7 +534,10 @@ class User1(threading.Thread):
         self.msg_to_sign = msg
 
         # Generate k_1
-        self.k_1 = secrets.randbelow(self.q - 1) + 1
+        while True:
+            self.k_1 = secrets.randbelow(self.q)
+            if self.k_1 != 0 and self.k_1 != 1 and self.k_1 != self.q - 1:
+                break
 
         # Compute R_1 = g^k_1 mod p
         self.R_1 = pow(self.g, self.k_1, self.p)
@@ -534,8 +569,8 @@ class User1(threading.Thread):
             # The protocol aborts
             PoC_DSA.src.general_procedures.abort()
         else:
-            if self.other_R_decommitment[0] == 1:
-                # The protocol aborts if R_2=1 or R_3=1, since it would cause problems in the following computations
+            if self.other_R_decommitment[0] == 1 or self.other_R_decommitment[0] == self.g:
+                # The protocol aborts if R_2=1 or R_2=g or R_3=1 or R_3=g, since it would cause problems in the following computations
                 PoC_DSA.src.general_procedures.abort()
             self.signature_3_part2()
     
@@ -544,8 +579,8 @@ class User1(threading.Thread):
         # Compute R = R_1 * R_other mod p
         self.R = (self.R_1 * self.other_R_decommitment[0]) % self.p
 
-        # If R=1 the protocol aborts, since it would cause problems in the following computations
-        if self.R == 1:
+        # If R=1 or R=g the protocol aborts, since it would cause problems in the following computations
+        if self.R == 1 or self.R == self.g:
             PoC_DSA.src.general_procedures.abort()
 
         # Compute e = H(m || R) mod q
@@ -674,7 +709,11 @@ class User2(threading.Thread):
             else:
                 self.other_u = msg.content[0]
                 self.other_X = msg.content[1]
-                self.c = secrets.randbelow(self.q - 1) + 1
+                # Generate c until its not 0
+                while True:
+                    self.c = secrets.randbelow(self.q)
+                    if self.c != 0:
+                        break
                 self.queue1.put(PoC_DSA.src.utils.Message(description="zk_challenge_x", sender=self.party_id, receiver=1, content=self.c))
         if msg.description == "zk_challenge_x" and msg.sender == 1:
             self.other_c = msg.content
@@ -694,7 +733,11 @@ class User2(threading.Thread):
             else:
                 self.other_u = msg.content[0]
                 self.other_X = msg.content[1]
-                self.c = secrets.randbelow(self.q - 1) + 1
+                # Generate c until its not 0
+                while True:
+                    self.c = secrets.randbelow(self.q)
+                    if self.c != 0:
+                        break
                 self.queue3.put(PoC_DSA.src.utils.Message(description="zk_challenge_x", sender=self.party_id, receiver=3, content=self.c))
         if msg.description == "zk_challenge_x" and msg.sender == 3:
             self.other_c = msg.content
@@ -724,7 +767,7 @@ class User2(threading.Thread):
             self.keygen_3(msg.content)
         if msg.description == "M_1" and msg.sender == 1:
             self.M_1 = msg.content
-            if self.M_1 == 1:
+            if self.M_1 == 1 or self.M_1 == self.g:
                 # The protocol aborts if M_1=1, since it would cause problems in the following computations
                 PoC_DSA.src.general_procedures.abort()
         if msg.description == "rec_info" and msg.sender == 1:
@@ -759,9 +802,12 @@ class User2(threading.Thread):
         
     # First phase of key generation
     def keygen_1(self):  
-        self.a_2 = secrets.randbelow(self.q - 1) + 1  # a_2 must be different from 0 to avoid A_2=1
-        self.y_3_2 = secrets.randbelow(self.q - 1) + 1 # y_3_2 must be different from 0 to avoid Y_3_2=1
-        self.m_2 = secrets.randbelow(self.q - 1) + 1  # m_2 must be different from 0 to avoid M_2=1
+        while True:
+            self.a_2 = secrets.randbelow(self.q)  # a_2 must be different from 0, 1 and q-1
+            self.y_3_2 = secrets.randbelow(self.q) # y_3_2 must be different from 0, 1 and q-1
+            self.m_2 = secrets.randbelow(self.q)  # m_2 must be different from 0, 1 and q-1
+            if self.a_2 != 0 and self.a_2 != 1 and self.a_2 != self.q - 1 and self.y_3_2 != 0 and self.y_3_2 != 1 and self.y_3_2 != self.q - 1 and self.m_2 != 0 and self.m_2 != 1 and self.m_2 != self.q - 1:
+                break
 
         self.A_2 = pow(self.g, self.a_2, self.p)
         self.Y_3_2 = pow(self.g, self.y_3_2, self.p)
@@ -787,8 +833,8 @@ class User2(threading.Thread):
             # The protocol aborts
             PoC_DSA.src.general_procedures.abort()
         else:
-            if self.A_Y_other_decommitment[0] == 1 or self.A_Y_other_decommitment[1] == 1:
-                # The protocol aborts if A_1=1 or Y_3_1=1, since it would cause problems in the following computations
+            if self.A_Y_other_decommitment[0] == 1 or self.A_Y_other_decommitment[0] == self.g or self.A_Y_other_decommitment[1] == 1 or self.A_Y_other_decommitment[1] == self.g:
+                # The protocol aborts if A_1=1 or A_1=g or Y_3_1=1 or Y_3_1=g, since it would cause problems in the following computations
                 PoC_DSA.src.general_procedures.abort()
             self.keygen_4()
 
@@ -822,13 +868,18 @@ class User2(threading.Thread):
         self.nizkp_prove()
 
     def nizkp_prove(self):
-        self.nizkp_nonce1 = secrets.randbelow(self.q - 1) + 1
+        # The nonce must be different from 0, 1 and q-1 to avoid problems in the following computations
+        while True:
+            self.nizkp_nonce1 = secrets.randbelow(self.q)
+            self.nizkp_nonce2 = secrets.randbelow(self.q)
+            if self.nizkp_nonce1 != 0 and self.nizkp_nonce1 != 1 and self.nizkp_nonce1 != self.q - 1 and self.nizkp_nonce2 != 0 and self.nizkp_nonce2 != 1 and self.nizkp_nonce2 != self.q - 1:
+                break
+
         self.nizkp_u1 = pow(self.g, self.nizkp_nonce1, self.p)
         self.nizkp_h1 = pow(self.g, self.y_2_3, self.p)
         self.nizkp_c1 = PoC_DSA.src.crypto_utils.tuple_hash(self.g, self.q, self.nizkp_h1, self.nizkp_u1)
         self.nizkp_z1 = (self.nizkp_nonce1 + self.y_2_3 * self.nizkp_c1) % self.q
-
-        self.nizkp_nonce2 = secrets.randbelow(self.q - 1) + 1
+        
         self.nizkp_u2 = pow(self.g, self.nizkp_nonce2, self.p)
         self.nizkp_h2 = pow(self.g, self.y_3_2, self.p)
         self.nizkp_c2 = PoC_DSA.src.crypto_utils.tuple_hash(self.g, self.q, self.nizkp_h2, self.nizkp_u2)
@@ -847,7 +898,12 @@ class User2(threading.Thread):
         self.zk_prove_x()
 
     def zk_prove_x(self):
-        self.zk_nonce = secrets.randbelow(self.q -1) + 1
+        # The nonce must be different from 0, 1 and q-1 to avoid problems in the following computation
+        while True:
+            self.zk_nonce = secrets.randbelow(self.q)
+            if self.zk_nonce != 0 and self.zk_nonce != 1 and self.zk_nonce != self.q - 1:
+                break
+
         self.u = pow(self.g, self.zk_nonce, self.p)
         self.X = pow(self.g, self.x_2, self.p)
         if self.recovery:
@@ -871,7 +927,10 @@ class User2(threading.Thread):
         self.msg_to_sign = msg
 
         # Generate k_2
-        self.k_2 = secrets.randbelow(self.q - 1) + 1
+        while True:
+            self.k_2 = secrets.randbelow(self.q)
+            if self.k_2 != 0 and self.k_2 != 1 and self.k_2 != self.q -1:
+                break
 
         # Compute R_2 = g^k_2 mod p
         self.R_2 = pow(self.g, self.k_2, self.p)
@@ -903,7 +962,7 @@ class User2(threading.Thread):
             # The protocol aborts
             PoC_DSA.src.general_procedures.abort()
         else:
-            if self.other_R_decommitment[0] == 1:
+            if self.other_R_decommitment[0] == 1 or self.other_R_decommitment[0] == self.g:
                 # The protocol aborts if R_1=1, since it would cause problems in the following computations
                 PoC_DSA.src.general_procedures.abort()
             self.signature_3_part2()
@@ -914,7 +973,7 @@ class User2(threading.Thread):
         self.R = (self.other_R_decommitment[0] * self.R_2) % self.p
 
         # If R=1, the signature would be invalid, so the protocol aborts
-        if self.R == 1:
+        if self.R == 1 or self.R == self.g:
             PoC_DSA.src.general_procedures.abort()
 
         # Compute e = H(m || R)

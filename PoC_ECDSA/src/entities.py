@@ -64,7 +64,11 @@ class RecoveryParty(threading.Thread):
             else:
                 self.other_u = msg.content[0]
                 self.other_X = msg.content[1]
-                self.c = secrets.randbelow(self.q - 1) + 1
+                # Generate c until its not 0
+                while True:
+                    self.c = secrets.randbelow(self.q)
+                    if self.c != 0:
+                        break
                 if msg.sender == 1:
                     self.queue1.put(PoC_ECDSA.src.utils.Message(description="zk_challenge_x", sender=self.party_id, receiver=1, content=self.c))
                 elif msg.sender == 2:
@@ -135,7 +139,11 @@ class RecoveryParty(threading.Thread):
         self.zk_prove_x()
     
     def zk_prove_x(self):
-        self.zk_nonce = secrets.randbelow(self.q -1) + 1
+        # Generate the nonce until its different than 0, 1 or q-1
+        while True:
+            self.zk_nonce = secrets.randbelow(self.q)
+            if self.zk_nonce != 0 and self.zk_nonce != 1 and self.zk_nonce != self.q - 1:
+                break
         self.u = curves_utils.scalar_mult(self.zk_nonce, self.g)
         self.X = curves_utils.scalar_mult(self.x_3, self.g)
 
@@ -150,7 +158,10 @@ class RecoveryParty(threading.Thread):
         self.msg_to_sign = self.message
 
         # Generate k_3
-        self.k_3 = secrets.randbelow(self.q - 1) + 1
+        while True:
+            self.k_3 = secrets.randbelow(self.q)
+            if self.k_3 != 0 and self.k_3 != 1 and self.k_3 != self.q - 1:
+                break
 
         # Compute R_3 = g * k_3 
         self.R_3 = curves_utils.scalar_mult(self.k_3, self.g)
@@ -183,8 +194,8 @@ class RecoveryParty(threading.Thread):
             PoC_ECDSA.src.general_procedures.abort()
         else:
             self.other_R = curves_utils.generate_point(self.other_R_decommitment[0], self.other_R_decommitment[1])
-            if curves_utils.is_infinity(self.other_R):
-                # The protocol aborts if R_2=1 or R_3=1, since it would cause problems in the following computations
+            if curves_utils.is_infinity(self.other_R) or curves_utils.is_generating_point(self.other_R):
+                # The protocol aborts if R_2=1 or R_2=G or R_3=1 or R_3=G, since it would cause problems in the following computations
                 PoC_ECDSA.src.general_procedures.abort()
             self.signature_3_part2()
 
@@ -194,7 +205,7 @@ class RecoveryParty(threading.Thread):
         self.R = curves_utils.point_add(self.R_3, self.other_R)
 
         # If R=point at infinity, the protocol aborts, since it would cause problems in the following computations
-        if curves_utils.is_infinity(self.R):
+        if curves_utils.is_infinity(self.R) or curves_utils.is_generating_point(self.R):
             PoC_ECDSA.src.general_procedures.abort()
 
         # Compute e = H(m || R_x) mod q
@@ -309,7 +320,11 @@ class User1(threading.Thread):
             else:
                 self.other_u = msg.content[0]
                 self.other_X = msg.content[1]
-                self.c = secrets.randbelow(self.q - 1) + 1
+                # Generate c until its not 0
+                while True:
+                    self.c = secrets.randbelow(self.q)
+                    if self.c != 0:
+                        break
                 self.queue2.put(PoC_ECDSA.src.utils.Message(description="zk_challenge_x", sender=self.party_id, receiver=2, content=self.c))
         if msg.description == "zk_challenge_x" and msg.sender == 2:
             self.other_c = msg.content
@@ -329,7 +344,11 @@ class User1(threading.Thread):
             else:
                 self.other_u = msg.content[0]
                 self.other_X = msg.content[1]
-                self.c = secrets.randbelow(self.q - 1) + 1
+                # Generate c until its not 0
+                while True:
+                    self.c = secrets.randbelow(self.q)
+                    if self.c != 0:
+                        break
                 self.queue3.put(PoC_ECDSA.src.utils.Message(description="zk_challenge_x", sender=self.party_id, receiver=3, content=self.c))
         if msg.description == "zk_challenge_x" and msg.sender == 3:
             self.other_c = msg.content
@@ -359,7 +378,7 @@ class User1(threading.Thread):
             self.keygen_3(msg.content)
         if msg.description == "M_2" and msg.sender == 2:
             self.M_2 = msg.content
-            if curves_utils.is_infinity(self.M_2):
+            if curves_utils.is_infinity(self.M_2) or curves_utils.is_generating_point(self.M_2):
                 # The protocol aborts if M_2=1, since it would cause problems in the following computations
                 PoC_ECDSA.src.general_procedures.abort()
         if msg.description == "rec_info" and msg.sender == 2:
@@ -395,9 +414,12 @@ class User1(threading.Thread):
 
     # First phase of key generation
     def keygen_1(self):
-        self.a_1 = secrets.randbelow(self.q - 1) + 1  # a_1 must be different from 0 to avoid A_1=1
-        self.y_3_1 = secrets.randbelow(self.q - 1) + 1  # y_3_1 must be different from 0 to avoid Y_3_1=1
-        self.m_1 = secrets.randbelow(self.q - 1) + 1  # m_1 must be different from 0 to avoid M_1=1
+        while True:
+            self.a_1 = secrets.randbelow(self.q - 1) + 1  # a_1 must be different from 0, 1 or q-1
+            self.y_3_1 = secrets.randbelow(self.q - 1) + 1  # y_3_1 must be different from 0, 1 or q-1
+            self.m_1 = secrets.randbelow(self.q - 1) + 1  # m_1 must be different from 0, 1 or q-1
+            if self.a_1 != 0 and self.a_1 != 1 and self.a_1 != self.q - 1 and self.y_3_1 != 0 and self.y_3_1 != 1 and self.y_3_1 != self.q - 1 and self.m_1 != 0 and self.m_1 != 1 and self.m_1 != self.q - 1:
+                break
 
         self.A_1 = curves_utils.scalar_mult(self.a_1, self.g)
         self.Y_3_1 = curves_utils.scalar_mult(self.y_3_1, self.g)
@@ -425,8 +447,8 @@ class User1(threading.Thread):
         else:
             self.A_2 = curves_utils.generate_point(self.A_Y_other_decommitment[0], self.A_Y_other_decommitment[1])
             self.Y_3_2 = curves_utils.generate_point(self.A_Y_other_decommitment[2], self.A_Y_other_decommitment[3])
-            if curves_utils.is_infinity(self.A_2) or curves_utils.is_infinity(self.Y_3_2):
-                # The protocol aborts if A_2=1 or Y_3_2=1, since it would cause problems in the following computations
+            if curves_utils.is_infinity(self.A_2) or curves_utils.is_generating_point(self.A_2) or curves_utils.is_infinity(self.Y_3_2) or curves_utils.is_generating_point(self.Y_3_2):
+                # The protocol aborts if A_2=1 or A_2=G or Y_3_2=1 or Y_3_2=G, since it would cause problems in the following computations
                 PoC_ECDSA.src.general_procedures.abort()
             self.keygen_4()
 
@@ -458,13 +480,18 @@ class User1(threading.Thread):
         self.nizkp_prove()
 
     def nizkp_prove(self):
-        self.nizkp_nonce1 = secrets.randbelow(self.q - 1) + 1
+        # The nonce must be different than 0, 1 or q-1
+        while True:
+            self.nizkp_nonce1 = secrets.randbelow(self.q)
+            self.nizkp_nonce2 = secrets.randbelow(self.q)
+            if self.nizkp_nonce1 != 0 and self.nizkp_nonce1 != 1 and self.nizkp_nonce1 != self.q - 1 and self.nizkp_nonce2 != 0 and self.nizkp_nonce2 != 1 and self.nizkp_nonce2 != self.q - 1:
+                break        
+        
         self.nizkp_u1 = curves_utils.scalar_mult(self.nizkp_nonce1, self.g)
         self.nizkp_h1 = curves_utils.scalar_mult(self.y_1_3, self.g)
         self.nizkp_c1 = PoC_ECDSA.src.crypto_utils.tuple_hash(self.g, self.q, self.nizkp_h1, self.nizkp_u1)
         self.nizkp_z1 = (self.nizkp_nonce1 + self.y_1_3 * self.nizkp_c1) % self.q
 
-        self.nizkp_nonce2 = secrets.randbelow(self.q - 1) + 1
         self.nizkp_u2 = curves_utils.scalar_mult(self.nizkp_nonce2, self.g)
         self.nizkp_h2 = curves_utils.scalar_mult(self.y_3_1, self.g)
         self.nizkp_c2 = PoC_ECDSA.src.crypto_utils.tuple_hash(self.g, self.q, self.nizkp_h2, self.nizkp_u2)
@@ -483,7 +510,12 @@ class User1(threading.Thread):
         self.zk_prove_x()
 
     def zk_prove_x(self):
-        self.zk_nonce = secrets.randbelow(self.q -1) + 1
+        # The nonce must be different than 0, 1 or q-1
+        while True:
+            self.zk_nonce = secrets.randbelow(self.q)
+            if self.zk_nonce != 0 and self.zk_nonce != 1 and self.zk_nonce != self.q -1:
+                break
+
         self.u = curves_utils.scalar_mult(self.zk_nonce, self.g)
         self.X = curves_utils.scalar_mult(self.x_1, self.g)
         if self.recovery:
@@ -507,7 +539,10 @@ class User1(threading.Thread):
         self.msg_to_sign = msg
 
         # Generate k_1
-        self.k_1 = secrets.randbelow(self.q - 1) + 1
+        while True:
+            self.k_1 = secrets.randbelow(self.q)
+            if self.k_1 != 0 and self.k_1 != 1 and self.k_1 != self.q - 1:
+                break
 
         # Compute R_1 = g * k_1
         self.R_1 = curves_utils.scalar_mult(self.k_1, self.g)
@@ -540,7 +575,7 @@ class User1(threading.Thread):
             PoC_ECDSA.src.general_procedures.abort()
         else:
             self.other_R = curves_utils.generate_point(self.other_R_decommitment[0], self.other_R_decommitment[1])
-            if curves_utils.is_infinity(self.other_R):
+            if curves_utils.is_infinity(self.other_R) or curves_utils.is_generating_point(self.other_R):
                 # The protocol aborts if R_2=1 or R_3=1, since it would cause problems in the following computations
                 PoC_ECDSA.src.general_procedures.abort()
             self.signature_3_part2()
@@ -551,7 +586,7 @@ class User1(threading.Thread):
         self.R = curves_utils.point_add(self.R_1, self.other_R)
 
         # If R=1 the protocol aborts, since it would cause problems in the following computations
-        if curves_utils.is_infinity(self.R):
+        if curves_utils.is_infinity(self.R) or curves_utils.is_generating_point(self.R):
             PoC_ECDSA.src.general_procedures.abort()
 
         # Compute e = H(m || R_x) mod q
@@ -680,7 +715,11 @@ class User2(threading.Thread):
             else:
                 self.other_u = msg.content[0]
                 self.other_X = msg.content[1]
-                self.c = secrets.randbelow(self.q - 1) + 1
+                # Generate c until its not 0
+                while True:
+                    self.c = secrets.randbelow(self.q)
+                    if self.c != 0:
+                        break
                 self.queue1.put(PoC_ECDSA.src.utils.Message(description="zk_challenge_x", sender=self.party_id, receiver=1, content=self.c))
         if msg.description == "zk_challenge_x" and msg.sender == 1:
             self.other_c = msg.content
@@ -700,7 +739,10 @@ class User2(threading.Thread):
             else:
                 self.other_u = msg.content[0]
                 self.other_X = msg.content[1]
-                self.c = secrets.randbelow(self.q - 1) + 1
+                while True:
+                    self.c = secrets.randbelow(self.q - 1) + 1
+                    if self.c != 0:
+                        break
                 self.queue3.put(PoC_ECDSA.src.utils.Message(description="zk_challenge_x", sender=self.party_id, receiver=3, content=self.c))
         if msg.description == "zk_challenge_x" and msg.sender == 3:
             self.other_c = msg.content
@@ -730,7 +772,7 @@ class User2(threading.Thread):
             self.keygen_3(msg.content)
         if msg.description == "M_1" and msg.sender == 1:
             self.M_1 = msg.content
-            if curves_utils.is_infinity(self.M_1):
+            if curves_utils.is_infinity(self.M_1) or curves_utils.is_generating_point(self.M_1):
                 # The protocol aborts if M_1=1, since it would cause problems in the following computations
                 PoC_ECDSA.src.general_procedures.abort()
         if msg.description == "rec_info" and msg.sender == 1:
@@ -766,9 +808,12 @@ class User2(threading.Thread):
         
     # First phase of key generation
     def keygen_1(self):  
-        self.a_2 = secrets.randbelow(self.q - 1) + 1  # a_2 must be different from 0 to avoid A_2=1
-        self.y_3_2 = secrets.randbelow(self.q - 1) + 1 # y_3_2 must be different from 0 to avoid Y_3_2=1
-        self.m_2 = secrets.randbelow(self.q - 1) + 1  # m_2 must be different from 0 to avoid M_2=1
+        while True:
+            self.a_2 = secrets.randbelow(self.q)  # a_2 must be different from 0, 1 and q-1
+            self.y_3_2 = secrets.randbelow(self.q) # y_3_2 must be different from 0, 1 and q-1
+            self.m_2 = secrets.randbelow(self.q)  # m_2 must be different from 0, 1 and q-1
+            if self.a_2 != 0 and self.a_2 != 1 and self.a_2 != self.q - 1 and self.y_3_2 != 0 and self.y_3_2 != 1 and self.y_3_2 != self.q - 1 and self.m_2 != 0 and self.m_2 != 1 and self.m_2 != self.q - 1:
+                break
 
         self.A_2 = curves_utils.scalar_mult(self.a_2, self.g)
         self.Y_3_2 = curves_utils.scalar_mult(self.y_3_2, self.g)
@@ -796,7 +841,7 @@ class User2(threading.Thread):
         else:
             self.A_1 = curves_utils.generate_point(self.A_Y_other_decommitment[0], self.A_Y_other_decommitment[1])
             self.Y_3_1 = curves_utils.generate_point(self.A_Y_other_decommitment[2], self.A_Y_other_decommitment[3])
-            if curves_utils.is_infinity(self.A_1) or curves_utils.is_infinity(self.Y_3_1):
+            if curves_utils.is_infinity(self.A_1) or curves_utils.is_generating_point(self.A_1) or curves_utils.is_infinity(self.Y_3_1) or curves_utils.is_generating_point(self.Y_3_1):
                 # The protocol aborts if A_1=1 or Y_3_1=1, since it would cause problems in the following computations
                 PoC_ECDSA.src.general_procedures.abort()
             self.keygen_4()
@@ -831,13 +876,18 @@ class User2(threading.Thread):
         self.nizkp_prove()
 
     def nizkp_prove(self):
-        self.nizkp_nonce1 = secrets.randbelow(self.q - 1) + 1
+        # The nonce must be different than 0, 1 and q-1
+        while True:
+            self.nizkp_nonce1 = secrets.randbelow(self.q)
+            self.nizkp_nonce2 = secrets.randbelow(self.q)
+            if self.nizkp_nonce1 != 0 and self.nizkp_nonce1 != 1 and self.nizkp_nonce1 != self.q - 1 and self.nizkp_nonce2 != 0 and self.nizkp_nonce2 != 1 and self.nizkp_nonce2 != self.q - 1:
+                break
+
         self.nizkp_u1 = curves_utils.scalar_mult(self.nizkp_nonce1, self.g)
         self.nizkp_h1 = curves_utils.scalar_mult(self.y_2_3, self.g)
         self.nizkp_c1 = PoC_ECDSA.src.crypto_utils.tuple_hash(self.g, self.q, self.nizkp_h1, self.nizkp_u1)
         self.nizkp_z1 = (self.nizkp_nonce1 + self.y_2_3 * self.nizkp_c1) % self.q
 
-        self.nizkp_nonce2 = secrets.randbelow(self.q - 1) + 1
         self.nizkp_u2 = curves_utils.scalar_mult(self.nizkp_nonce2, self.g)
         self.nizkp_h2 = curves_utils.scalar_mult(self.y_3_2, self.g)
         self.nizkp_c2 = PoC_ECDSA.src.crypto_utils.tuple_hash(self.g, self.q, self.nizkp_h2, self.nizkp_u2)
@@ -856,7 +906,10 @@ class User2(threading.Thread):
         self.zk_prove_x()
 
     def zk_prove_x(self):
-        self.zk_nonce = secrets.randbelow(self.q -1) + 1
+        while True:
+            self.zk_nonce = secrets.randbelow(self.q)
+            if self.zk_nonce != 0 and self.zk_nonce != 1 and self.zk_nonce != self.q -1:
+                break
         self.u = curves_utils.scalar_mult(self.zk_nonce, self.g)
         self.X = curves_utils.scalar_mult(self.x_2, self.g)
         if self.recovery:
@@ -879,7 +932,10 @@ class User2(threading.Thread):
         self.msg_to_sign = msg
 
         # Generate k_2
-        self.k_2 = secrets.randbelow(self.q - 1) + 1
+        while True:
+            self.k_2 = secrets.randbelow(self.q)
+            if self.k_2 != 0 and self.k_2 != 1 and self.k_2 != self.q - 1:
+                break
 
         # Compute R_2 = g * k_2
         self.R_2 = curves_utils.scalar_mult(self.k_2, self.g)
@@ -912,7 +968,7 @@ class User2(threading.Thread):
             PoC_ECDSA.src.general_procedures.abort()
         else:
             self.other_R = curves_utils.generate_point(self.other_R_decommitment[0], self.other_R_decommitment[1])
-            if curves_utils.is_infinity(self.other_R):
+            if curves_utils.is_infinity(self.other_R) or curves_utils.is_generating_point(self.other_R):
                 # The protocol aborts if R_1 is the point at infinity
                 PoC_ECDSA.src.general_procedures.abort()
             self.signature_3_part2()
@@ -923,7 +979,7 @@ class User2(threading.Thread):
         self.R = curves_utils.point_add(self.R_2, self.other_R)
 
         # If R is the point at infinity, the signature would be invalid, so the protocol aborts
-        if curves_utils.is_infinity(self.R):
+        if curves_utils.is_infinity(self.R) or curves_utils.is_generating_point(self.R):
             PoC_ECDSA.src.general_procedures.abort()
 
         # Compute e = H(m || R)
