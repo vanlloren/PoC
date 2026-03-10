@@ -33,3 +33,6 @@ def negate_point(P):
 
 def point_at_infinity():
     return ellipticcurve.INFINITY
+
+def is_generating_point(P):
+    return P == NIST256p.generator
