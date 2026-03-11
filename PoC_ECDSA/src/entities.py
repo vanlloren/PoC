@@ -215,7 +215,7 @@ class RecoveryParty(threading.Thread):
         self.s_3 = (self.k_3 - self.e * self.omega_3) % self.q
 
         # Compute the commitment for s_3
-        s_3_commitment, s_3_decommitment = PoC_ECDSA.src.crypto_utils.commit_single(self.s_3, self.q)
+        s_3_commitment, s_3_decommitment = PoC_ECDSA.src.crypto_utils.commit_single("s_i", self.s_3, self.q)
         self.s_3_decommitment = s_3_decommitment
 
         # Send the commitment to the other user
@@ -237,7 +237,7 @@ class RecoveryParty(threading.Thread):
     def combine(self, other_s_decommitment):
         self.other_s_decommitment = other_s_decommitment
         # Verify the commitment received from the other user
-        if not PoC_ECDSA.src.crypto_utils.verify_commitment(self.other_s_commitment, other_s_decommitment):
+        if not PoC_ECDSA.src.crypto_utils.verify_commitment("s_i", self.other_s_commitment, other_s_decommitment):
             # The protocol aborts
             PoC_ECDSA.src.general_procedures.abort()
         else:
@@ -599,7 +599,7 @@ class User1(threading.Thread):
             self.s_1 = (self.k_1 - self.e * self.omega_1) % self.q
 
         # Compute the commitment for s_1
-        s_1_commitment, s_1_decommitment = PoC_ECDSA.src.crypto_utils.commit_single(self.s_1, self.q)
+        s_1_commitment, s_1_decommitment = PoC_ECDSA.src.crypto_utils.commit_single("s_i", self.s_1, self.q)
         self.s_1_decommitment = s_1_decommitment
 
         # Send the commitment to the other user
@@ -621,7 +621,7 @@ class User1(threading.Thread):
     def combine(self, other_s_decommitment):
         self.other_s_decommitment = other_s_decommitment
         # Verify the commitment received from the other user
-        if not PoC_ECDSA.src.crypto_utils.verify_commitment(self.other_s_commitment, other_s_decommitment):
+        if not PoC_ECDSA.src.crypto_utils.verify_commitment("s_i", self.other_s_commitment, other_s_decommitment):
             # The protocol aborts
             PoC_ECDSA.src.general_procedures.abort()
         else:
@@ -992,7 +992,7 @@ class User2(threading.Thread):
             self.s_2 = (self.k_2 - self.e * self.omega_2) % self.q
 
         # Compute s_2 commitment
-        s_2_commitment, s_2_decommitment = PoC_ECDSA.src.crypto_utils.commit_single(self.s_2, self.q)
+        s_2_commitment, s_2_decommitment = PoC_ECDSA.src.crypto_utils.commit_single("s_i", self.s_2, self.q)
         self.s_2_decommitment = s_2_decommitment
 
         # Send s_2 commitment to the other user
@@ -1014,7 +1014,7 @@ class User2(threading.Thread):
     def combine(self, other_s_decommitment):
         self.other_s_decommitment = other_s_decommitment
         # Verify the commitment received from the other user
-        if not PoC_ECDSA.src.crypto_utils.verify_commitment(self.other_s_commitment, other_s_decommitment):
+        if not PoC_ECDSA.src.crypto_utils.verify_commitment("s_i", self.other_s_commitment, other_s_decommitment):
             # The protocol aborts
             PoC_ECDSA.src.general_procedures.abort()
         else:

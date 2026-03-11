@@ -107,6 +107,7 @@ def decrypt_with_private_key(private_key, ciphertext):
 # Generates Commitment and Decommitment for a given value
 # Takes as parameter one point of the elliptic curve and the curve order q
 # and returns a commitment and decommitment (that contains the point coordinates and the nonce)
+# ONLY USED TO COMMIT r_i POINT OF THE CURVE
 def commit_single_point(point, q):
     # Select a random nonce for the commitment
     nonce = secrets.randbelow(q)  # random nonce in the range 0 to q-1
@@ -117,9 +118,11 @@ def commit_single_point(point, q):
     y = point.y()
     x_bytes = x.to_bytes(32, byteorder='big') # 256 bits = 32 bytes
     y_bytes = y.to_bytes(32, byteorder='big') # 256 bits = 32 bytes
-    value_bytes = x_bytes + y_bytes # Total 512 bits (64 bytes)
+    
+    context_info = b"PoC_ECDSA_r_i_Commitment"
 
-    hash_input = value_bytes + nonce_bytes
+    # H(context || len(nonce) || nonce || len(pointx) || pointx || len(pointy) || pointy || output_length)
+    hash_input = context_info + len(nonce_bytes).to_bytes(4, byteorder='big') + nonce_bytes + len(x_bytes).to_bytes(4, byteorder='big') + x_bytes + len(y_bytes).to_bytes(4, byteorder='big') + y_bytes + (32).to_bytes(4, byteorder='big')
     commitment = hashlib.shake_256(hash_input).digest(32)
 
     return commitment, (x, y, nonce)
@@ -127,6 +130,7 @@ def commit_single_point(point, q):
 # Generates Commitment and Decommitment for two values
 # Takes as parameters two points of the elliptic curve and the curve order q
 # and returns a commitment and decommitment (that contains the coordinates of both points and the nonce)
+# ONLY USED TO COMMIT THE POINTS A_i AND Y_3_i OF THE CURVE
 def commit_couple_point(point1, point2, q):
     # Select a random nonce for the commitment
     nonce = secrets.randbelow(q)  # random nonce in the range 0 to q-1 
@@ -137,10 +141,18 @@ def commit_couple_point(point1, point2, q):
     y1 = point1.y()
     x2 = point2.x()
     y2 = point2.y()
-    value1_bytes = x1.to_bytes(32, byteorder='big') + y1.to_bytes(32, byteorder='big')
-    value2_bytes = x2.to_bytes(32, byteorder='big') + y2.to_bytes(32, byteorder='big')
+    x1_bytes = x1.to_bytes(32, byteorder='big') # 256 bits = 32 bytes
+    y1_bytes = y1.to_bytes(32, byteorder='big') # 256 bits = 32 bytes
+    x2_bytes = x2.to_bytes(32, byteorder='big') # 256 bits = 32 bytes
+    y2_bytes = y2.to_bytes(32, byteorder='big') # 256 bits = 32 bytes
 
-    hash_input = value1_bytes + value2_bytes + nonce_bytes
+    context_info = b"PoC_ECDSA_A_i_Y_3_i_Commitment"
+
+    # H(context || len(nonce) || nonce || len(point1x) || point1x || len(point1y) || point1y || len(point2x) || point2x || len(point2y) || point2y || output_length)
+    hash_input = (context_info + len(nonce_bytes).to_bytes(4, byteorder='big') + nonce_bytes +
+                len(x1_bytes).to_bytes(4, byteorder='big') + x1_bytes + len(y1_bytes).to_bytes(4, byteorder='big') + y1_bytes +
+                len(x2_bytes).to_bytes(4, byteorder='big') + x2_bytes + len(y2_bytes).to_bytes(4, byteorder='big') + y2_bytes +
+                (32).to_bytes(4, byteorder='big'))    
     commitment = hashlib.shake_256(hash_input).digest(32)    
 
     return commitment, (x1, y1, x2, y2, nonce)
@@ -149,15 +161,25 @@ def commit_couple_point(point1, point2, q):
 def verify_commitment_point(commitment, decommitment):
     if len(decommitment) == 3:
         point_x, point_y, nonce = decommitment
-        point_bytes = point_x.to_bytes(32, byteorder='big') + point_y.to_bytes(32, byteorder='big')
+        context_info = b"PoC_ECDSA_r_i_Commitment"
+        # H(context || len(nonce) || nonce || len(pointx) || pointx || len(pointy) || pointy || output_length)
+        x_bytes = point_x.to_bytes(32, byteorder='big') # 256 bits = 32 bytes
+        y_bytes = point_y.to_bytes(32, byteorder='big') # 256 bits = 32 bytes
         nonce_bytes = nonce.to_bytes(32, byteorder='big')
-        hash_input = point_bytes + nonce_bytes
+        hash_input = context_info + len(nonce_bytes).to_bytes(4, byteorder='big') + nonce_bytes + len(x_bytes).to_bytes(4, byteorder='big') + x_bytes + len(y_bytes).to_bytes(4, byteorder='big') + y_bytes + (32).to_bytes(4, byteorder='big')
     elif len(decommitment) == 5:
         x1, y1, x2, y2, nonce = decommitment
-        value1_bytes = x1.to_bytes(32, byteorder='big') + y1.to_bytes(32, byteorder='big')
-        value2_bytes = x2.to_bytes(32, byteorder='big') + y2.to_bytes(32, byteorder='big')
+        context_info = b"PoC_ECDSA_A_i_Y_3_i_Commitment"
+        # H(context || len(nonce) || nonce || len(point1x) || point1x || len(point1y) || point1y || len(point2x) || point2x || len(point2y) || point2y || output_length)   
+        x1_bytes = x1.to_bytes(32, byteorder='big') # 256 bits = 32 bytes
+        y1_bytes = y1.to_bytes(32, byteorder='big') # 256 bits = 32 bytes
+        x2_bytes = x2.to_bytes(32, byteorder='big') # 256 bits = 32 bytes
+        y2_bytes = y2.to_bytes(32, byteorder='big') # 256 bits = 32 bytes
         nonce_bytes = nonce.to_bytes(32, byteorder='big')
-        hash_input = value1_bytes + value2_bytes + nonce_bytes
+        hash_input = (context_info + len(nonce_bytes).to_bytes(4, byteorder='big') + nonce_bytes +
+                len(x1_bytes).to_bytes(4, byteorder='big') + x1_bytes + len(y1_bytes).to_bytes(4, byteorder='big') + y1_bytes +
+                len(x2_bytes).to_bytes(4, byteorder='big') + x2_bytes + len(y2_bytes).to_bytes(4, byteorder='big') + y2_bytes +
+                (32).to_bytes(4, byteorder='big'))
     else:
         raise ValueError("Invalid decommitment format")
 
@@ -170,48 +192,41 @@ def verify_commitment_point(commitment, decommitment):
 
 # Generates Commitment and Decommitment for a given value
 # Takes as parameter one value and the group order q, and returns a commitment and decommitment
-def commit_single(value1, q):
+def commit_single(context, value1, q):
     # Select a random nonce for the commitment
     nonce = secrets.randbelow(q)  # random nonce in the range 0 to q-1
     nonce_bytes = nonce.to_bytes(32, byteorder='big') # Convert the nonce to 256bits
 
-    # Convert the value to 384 bytes
-    value_bytes = value1.to_bytes(384, byteorder='big')
+    if context == "s_i":
+        context_info = b"PoC_DSA_s_i_Commitment"
+        # Convert the value in 32 bytes (256 bits)
+        value_bytes = value1.to_bytes(32, byteorder='big')
+    elif context == "r_i":
+        context_info = b"PoC_DSA_r_i_Commitment"
+        # Convert the value in 384 bytes (3072 bits)
+        value_bytes = value1.to_bytes(384, byteorder='big')
 
-    hash_input = value_bytes + nonce_bytes
+    # H(context || len(nonce) || nonce || len(value) || value || output_length)
+    hash_input = (context_info + len(nonce_bytes).to_bytes(4, byteorder='big') + nonce_bytes + len(value_bytes).to_bytes(4, byteorder='big') + value_bytes + (32).to_bytes(4, byteorder='big'))
     commitment = hashlib.shake_256(hash_input).digest(32)    
 
     return commitment, (value1, nonce)
 
-# Generates Commitment and Decommitment for two values
-# Takes as parameters two values and the group order q, and returns a commitment and decommitment
-def commit_couple(value1, value2, q):
-    # Select a random nonce for the commitment
-    nonce = secrets.randbelow(q)  # random nonce in the range 0 to q-1 
-    nonce_bytes = nonce.to_bytes(32, byteorder='big') # Convert the nonce to 256bits
-
-    # Convert the values to 384 bytes each
-    value1_bytes = value1.to_bytes(384, byteorder='big')
-    value2_bytes = value2.to_bytes(384, byteorder='big')
-
-    hash_input = value1_bytes + value2_bytes + nonce_bytes
-    commitment = hashlib.shake_256(hash_input).digest(32)    
-
-    return commitment, (value1, value2, nonce)
-
 # Verifies a commitment against a decommitment
-def verify_commitment(commitment, decommitment):
+def verify_commitment(context, commitment, decommitment):
     if len(decommitment) == 2:
         value1, nonce = decommitment
-        value_bytes = value1.to_bytes(384, byteorder='big')
         nonce_bytes = nonce.to_bytes(32, byteorder='big')
-        hash_input = value_bytes + nonce_bytes
-    elif len(decommitment) == 3:
-        value1, value2, nonce = decommitment
-        value1_bytes = value1.to_bytes(384, byteorder='big')
-        value2_bytes = value2.to_bytes(384, byteorder='big')
-        nonce_bytes = nonce.to_bytes(32, byteorder='big')
-        hash_input = value1_bytes + value2_bytes + nonce_bytes
+
+        if context == "s_i":
+            context_info = b"PoC_DSA_s_i_Commitment"
+            value_bytes = value1.to_bytes(32, byteorder='big')
+        elif context == "r_i":
+            context_info = b"PoC_DSA_r_i_Commitment"
+            value_bytes = value1.to_bytes(384, byteorder='big')
+
+        # H(context || len(nonce) || nonce || len(value) || value || output_length)
+        hash_input = (context_info + len(nonce_bytes).to_bytes(4, byteorder='big') + nonce_bytes + len(value_bytes).to_bytes(4, byteorder='big') + value_bytes + (32).to_bytes(4, byteorder='big'))
     else:
         raise ValueError("Invalid decommitment format")
 
