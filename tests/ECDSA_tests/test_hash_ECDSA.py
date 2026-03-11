@@ -27,8 +27,12 @@ def test_hash_message_truncation():
     # Convert nonce_x to bytes (32 bytes for 256-bit numbers)
     nonce_bytes = nonce_x.to_bytes(32, byteorder='big')
     message_bytes = message.encode('utf-8')
-    combined = nonce_bytes + message_bytes
-    hash_digest = hashlib.sha256(combined).digest()
+    context_info = b"PoC_ECDSA_Schnorr_Signature"
+
+    # H(context || len(nonce) || nonce || len(message) || message || output_length)
+    combined = context_info + len(nonce_bytes).to_bytes(4, byteorder='big') + nonce_bytes + len(message_bytes).to_bytes(4, byteorder='big') + message_bytes + (16).to_bytes(4, byteorder='big')  # output_length is 16 bytes (128 bits)
+
+    hash_digest = hashlib.shake_256(combined).digest(32)
     
     # The expected truncated hash is the first 16 bytes of the full digest
     expected_truncated_hash = int.from_bytes(hash_digest[:16], byteorder='big') % q

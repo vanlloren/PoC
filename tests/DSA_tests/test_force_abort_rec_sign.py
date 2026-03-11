@@ -14,7 +14,7 @@ def test_signature_validity_fail():
     def mock_combine_rec(self, other_s_decommitment):
         self.other_s_decommitment = other_s_decommitment
         # Verify the commitment received from the other user
-        if not PoC_DSA.src.crypto_utils.verify_commitment(self.other_s_commitment, other_s_decommitment):
+        if not PoC_DSA.src.crypto_utils.verify_commitment("s_i", self.other_s_commitment, other_s_decommitment):
             # The protocol aborts
             PoC_DSA.src.general_procedures.abort()
         else:
@@ -49,7 +49,7 @@ def test_combine_commitment_verification_fail():
         # Add 1 to the decommitment to fail the verification
         self.other_s_decommitment = (self.other_s_decommitment[0] + 1, self.other_s_decommitment[1])
         # Verify the commitment received from the other user
-        if not PoC_DSA.src.crypto_utils.verify_commitment(self.other_s_commitment, self.other_s_decommitment):
+        if not PoC_DSA.src.crypto_utils.verify_commitment("s_i", self.other_s_commitment, self.other_s_decommitment):
             # The protocol aborts
             PoC_DSA.src.general_procedures.abort()
         else:
@@ -92,7 +92,7 @@ def test_signature_3_part_2_R_equals_1_fail():
         self.s_3 = (self.k_3 - self.e * self.omega_3) % self.q
 
         # Compute the commitment for s_3
-        s_3_commitment, s_3_decommitment = PoC_DSA.src.crypto_utils.commit_single(self.s_3, self.q)
+        s_3_commitment, s_3_decommitment = PoC_DSA.src.crypto_utils.commit_single("s_i", self.s_3, self.q)
         self.s_3_decommitment = s_3_decommitment
 
         # Send the commitment to the other user
@@ -115,7 +115,7 @@ def test_signature_validity_fail_other_R_equals_1():
     def mock_signature_3_rec(self, other_R_decommitment):
         self.other_R_decommitment = other_R_decommitment
         # Verify the commitment received from the other user
-        if not PoC_DSA.src.crypto_utils.verify_commitment(self.other_R_commitment, self.other_R_decommitment):
+        if not PoC_DSA.src.crypto_utils.verify_commitment("r_i", self.other_R_commitment, self.other_R_decommitment):
             # The protocol aborts
             PoC_DSA.src.general_procedures.abort()
         else:
@@ -142,7 +142,7 @@ def test_signature_3_rec_wrong_other_R_decommitment():
         # Add 1 to the decommitment to make the check fail
         self.other_R_decommitment = (self.other_R_decommitment[0] + 1, self.other_R_decommitment[1])
         # Verify the commitment received from the other user
-        if not PoC_DSA.src.crypto_utils.verify_commitment(self.other_R_commitment, self.other_R_decommitment):
+        if not PoC_DSA.src.crypto_utils.verify_commitment("r_i", self.other_R_commitment, self.other_R_decommitment):
             # The protocol aborts
             PoC_DSA.src.general_procedures.abort()
         else:

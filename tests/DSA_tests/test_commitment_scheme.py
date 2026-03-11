@@ -12,7 +12,7 @@ def test_commitment_basic_operation():
         p, q, g = generate_schnorr_group()
         value = 12345
         
-        result = commit_single(value, q)
+        result = commit_single("s_i", value, q)
         
         # Verifica che restituisca una tupla di 2 elementi
         assert isinstance(result, tuple)
@@ -63,15 +63,15 @@ def test_commitment_and_verification_single():
     value2 = 67890
     value_error = 54321
 
-    commitment, decommitment = commit_single(value, q)
+    commitment, decommitment = commit_single("s_i", value, q)
     commitment_couple, decommitment_couple = commit_couple(value, value2, q)
-    commitment_error, decommitment_error = commit_single(value_error, q)
+    commitment_error, decommitment_error = commit_single("s_i", value_error, q)
     commitment_couple_error, decommitment_couple_error = commit_couple(value_error, value2, q)
 
-    assert verify_commitment(commitment, decommitment) == True
-    assert verify_commitment(commitment_couple, decommitment_couple) == True
-    assert verify_commitment(commitment, decommitment_error) == False
-    assert verify_commitment(commitment_couple, decommitment_couple_error) == False
+    assert verify_commitment("s_i", commitment, decommitment) == True
+    assert verify_commitment(None, commitment_couple, decommitment_couple) == True
+    assert verify_commitment("s_i", commitment, decommitment_error) == False
+    assert verify_commitment(None, commitment_couple, decommitment_couple_error) == False
 
 # No need to test for too large value that cannot be represented in 384 bytes
 # In single or double commit, the value is always converted to 384 bytes, so larger values

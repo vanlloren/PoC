@@ -15,10 +15,10 @@ def test_keygen_abort_on_wrong_decommitment_p2():
     
         self.A_Y_other_decommitment = decommitment
         # Add 1 to the decommitment to make it wrong
-        decommitment = (decommitment[0], (decommitment[1] + 1) % self.q)
+        decommitment = (decommitment[0], (decommitment[1] + 1) % self.q, decommitment[2])
 
         # Verify the commitment received from the other user
-        if not PoC_DSA.src.crypto_utils.verify_commitment(self.A_Y_other_commitment, decommitment):
+        if not PoC_DSA.src.crypto_utils.verify_commitment(None, self.A_Y_other_commitment, decommitment):
             # The protocol aborts
             PoC_DSA.src.general_procedures.abort()
         else:
@@ -38,10 +38,10 @@ def test_keygen_abort_on_wrong_decommitment_p1():
     
         self.A_Y_other_decommitment = decommitment
         # Add 1 to the decommitment to make it wrong
-        decommitment = (decommitment[0], (decommitment[1] + 1) % self.q)
+        decommitment = (decommitment[0], (decommitment[1] + 1) % self.q, decommitment[2])
 
         # Verify the commitment received from the other user
-        if not PoC_DSA.src.crypto_utils.verify_commitment(self.A_Y_other_commitment, decommitment):
+        if not PoC_DSA.src.crypto_utils.verify_commitment(None, self.A_Y_other_commitment, decommitment):
             # The protocol aborts
             PoC_DSA.src.general_procedures.abort()
         else:
