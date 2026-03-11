@@ -8,7 +8,6 @@ import hashlib
 import secrets
 import ecdsa
 from ecdsa import NIST256p, ellipticcurve
-from Crypto.Hash import TupleHash256 as TupleHash
 
 # Generates an elliptic curve with specified parameters
 def generate_elliptic_curve():
