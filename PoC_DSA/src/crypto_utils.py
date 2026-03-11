@@ -103,21 +103,30 @@ def decrypt_with_private_key(private_key, ciphertext):
 
 # Generates Commitment and Decommitment for a given value
 # Takes as parameter one value and the group order q, and returns a commitment and decommitment
-def commit_single(value1, q):
+# USED TO COMMIT r_i OR s_i. NEEDS DOMAIN SEPARATION
+def commit_single(context, value1, q):
     # Select a random nonce for the commitment
     nonce = secrets.randbelow(q)  # random nonce in the range 0 to q-1
     nonce_bytes = nonce.to_bytes(32, byteorder='big') # Convert the nonce to 256bits
 
-    # Convert the value to 384 bytes
-    value_bytes = value1.to_bytes(384, byteorder='big')
+    if context == "s_i":
+        context_info = b"PoC_DSA_s_i_Commitment"
+        # Convert the value in 32 bytes (256 bits)
+        value_bytes = value1.to_bytes(32, byteorder='big')
+    elif context == "r_i":
+        context_info = b"PoC_DSA_r_i_Commitment"
+        # Convert the value in 384 bytes (3072 bits)
+        value_bytes = value1.to_bytes(384, byteorder='big')
 
-    hash_input = value_bytes + nonce_bytes
+    # H(context || len(nonce) || nonce || len(value) || value || output_length)
+    hash_input = (context_info + len(nonce_bytes).to_bytes(4, byteorder='big') + nonce_bytes + len(value_bytes).to_bytes(4, byteorder='big') + value_bytes + (32).to_bytes(4, byteorder='big'))
     commitment = hashlib.shake_256(hash_input).digest(32)    
 
     return commitment, (value1, nonce)
 
 # Generates Commitment and Decommitment for two values
 # Takes as parameters two values and the group order q, and returns a commitment and decommitment
+# ONLY USED TO COMMIT A_i AND Y_3_i IN KEY GEN
 def commit_couple(value1, value2, q):
     # Select a random nonce for the commitment
     nonce = secrets.randbelow(q)  # random nonce in the range 0 to q-1 
@@ -127,24 +136,38 @@ def commit_couple(value1, value2, q):
     value1_bytes = value1.to_bytes(384, byteorder='big')
     value2_bytes = value2.to_bytes(384, byteorder='big')
 
-    hash_input = value1_bytes + value2_bytes + nonce_bytes
+    context_info = b"PoC_DSA_Key_Generation_Commitment"  # Context string to prevent cross-protocol attacks
+
+    # H(context || len(nonce) || nonce || len(value1) || value1 || len(value2) || value2 || output_length)
+    hash_input = (context_info + len(nonce_bytes).to_bytes(4, byteorder='big') + nonce_bytes + len(value1_bytes).to_bytes(4, byteorder='big') + value1_bytes + len(value2_bytes).to_bytes(4, byteorder='big') + value2_bytes + (32).to_bytes(4, byteorder='big'))
     commitment = hashlib.shake_256(hash_input).digest(32)    
 
     return commitment, (value1, value2, nonce)
 
 # Verifies a commitment against a decommitment
-def verify_commitment(commitment, decommitment):
+def verify_commitment(context, commitment, decommitment):
     if len(decommitment) == 2:
         value1, nonce = decommitment
-        value_bytes = value1.to_bytes(384, byteorder='big')
         nonce_bytes = nonce.to_bytes(32, byteorder='big')
-        hash_input = value_bytes + nonce_bytes
+
+        if context == "s_i":
+            context_info = b"PoC_DSA_s_i_Commitment"
+            value_bytes = value1.to_bytes(32, byteorder='big')
+        elif context == "r_i":
+            context_info = b"PoC_DSA_r_i_Commitment"
+            value_bytes = value1.to_bytes(384, byteorder='big')
+
+        # H(context || len(nonce) || nonce || len(value) || value || output_length)
+        hash_input = (context_info + len(nonce_bytes).to_bytes(4, byteorder='big') + nonce_bytes + len(value_bytes).to_bytes(4, byteorder='big') + value_bytes + (32).to_bytes(4, byteorder='big'))
     elif len(decommitment) == 3:
         value1, value2, nonce = decommitment
         value1_bytes = value1.to_bytes(384, byteorder='big')
         value2_bytes = value2.to_bytes(384, byteorder='big')
         nonce_bytes = nonce.to_bytes(32, byteorder='big')
-        hash_input = value1_bytes + value2_bytes + nonce_bytes
+
+        # verifing a couple commitment
+        context_info = b"PoC_DSA_Key_Generation_Commitment"  # Context string to prevent cross-protocol attacks
+        hash_input = (context_info + len(nonce_bytes).to_bytes(4, byteorder='big') + nonce_bytes + len(value1_bytes).to_bytes(4, byteorder='big') + value1_bytes + len(value2_bytes).to_bytes(4, byteorder='big') + value2_bytes + (32).to_bytes(4, byteorder='big'))
     else:
         raise ValueError("Invalid decommitment format")
 
