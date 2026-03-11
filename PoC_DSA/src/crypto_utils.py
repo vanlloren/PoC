@@ -4,7 +4,6 @@ from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.asymmetric import utils
 import hashlib
 import secrets
-from Crypto.Hash import TupleHash256 as TupleHash
 
 # Generates a Schnorr group with specified parameters
 def generate_schnorr_group():
@@ -17,8 +16,9 @@ def generate_schnorr_group():
 
     return p, q, g
 
-# Returns a SHA256 hash of the message combined with the nonce (r), truncated to 128 bits for security
+# Returns a SHAKE-256 hash of the message combined with the nonce (r), truncated to 128 bits for security
 # Takes as parameters a 3072-bit nonce, a message, and the group order q, and returns an integer hash value modulo q
+# ONLY APPLIED IN SCHNORR SIGNATURE CONTEXT
 def hash_message(nonce, message, q):
     # Encoding the nonce and message to bytes if not too long
     if nonce.bit_length() > 3072:
@@ -32,11 +32,14 @@ def hash_message(nonce, message, q):
         message_bytes = message
     else:
         raise ValueError("Unsupported message type. Must be str, int, or bytes.")
-        
-    # Concatenate nonce and message bytes
-    combined = nonce_bytes + message_bytes
+
+    context_info = b"PoC_DSA_Schnorr_Signature"  # Context string to prevent cross-protocol attacks
     
-    # Hash the combined bytes using SHA-256
+    # Concatenate context, nonce, message length, and message bytes
+    # H(context || len(nonce) || nonce || len(message) || message || output_length)
+    combined = context_info + len(nonce_bytes).to_bytes(4, byteorder='big') + nonce_bytes + len(message_bytes).to_bytes(4, byteorder='big') + message_bytes + (16).to_bytes(4, byteorder='big')
+    
+    # Hash the combined bytes using SHAKE-256
     hash_digest = hashlib.shake_256(combined).digest(32)
 
     # Truncate the hash for 128-bit security
@@ -155,22 +158,25 @@ def verify_commitment(commitment, decommitment):
 # Used to compute the hash of the quartet g, q, h, u 
 # where g is the generator of the group, q is the order of the group,
 # h is g^something, and u is g^somethingelse
+# ONLY USED IN NIZKP
 def tuple_hash(arg1, arg2, arg3, arg4):
-    # Convert arguments to bytes
+   # Convert arguments to bytes
     arg1_bytes = arg1.to_bytes(384, byteorder='big')  # g is 3072 bits, so 384 bytes
     arg2_bytes = arg2.to_bytes(32, byteorder='big')   # q is 256 bits, so 32 bytes
     arg3_bytes = arg3.to_bytes(384, byteorder='big')  # h is 3072 bits, so 384 bytes
     arg4_bytes = arg4.to_bytes(384, byteorder='big')  # u is 3072 bits, so 384 bytes
 
-    # Create a TupleHash object
-    tuple_hash_obj = TupleHash.new(digest_bits=256)
+    context_info = b"PoC_DSA_NIZKP"  # Context string to prevent cross-protocol attacks
 
-    # Update the hash with the byte representations of the arguments
-    tuple_hash_obj.update(arg1_bytes)
-    tuple_hash_obj.update(arg2_bytes)
-    tuple_hash_obj.update(arg3_bytes)
-    tuple_hash_obj.update(arg4_bytes)
-
-    # Finalize and return the hash digest as an integer
-    hash_digest = tuple_hash_obj.digest()
-    return int.from_bytes(hash_digest, byteorder='big')
+    # Concatenate context, arguments, and their lengths
+    # H(context || len(arg1) || arg1 || || len(arg2) || arg2 || len(arg3) || arg3 || len(arg4) || arg4)
+    combined = (context_info + 
+                len(arg1_bytes).to_bytes(4, byteorder='big') + arg1_bytes +
+                len(arg2_bytes).to_bytes(4, byteorder='big') + arg2_bytes +
+                len(arg3_bytes).to_bytes(4, byteorder='big') + arg3_bytes +
+                len(arg4_bytes).to_bytes(4, byteorder='big') + arg4_bytes)
+    
+    hash_digest = hashlib.shake_256(combined).digest(32)
+    digest = int.from_bytes(hash_digest, byteorder='big')
+    digest = digest % arg2  # Reduce the hash modulo q
+    return digest

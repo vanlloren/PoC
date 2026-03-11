@@ -20,7 +20,7 @@ def generate_elliptic_curve():
 
     return g, p, n, name
 
-# Returns a SHA256 hash of the message combined with the nonce (r), truncated to 128 bits for security
+# Returns a SHAKE-256 hash of the message combined with the nonce (r), truncated to 128 bits for security
 # Takes as parameters a 256-bit nonce (the x-coordinate of the nonce point), a message
 # and the curve order q, and returns an integer hash value modulo q
 def hash_message(nonce, message, q):
@@ -37,10 +37,13 @@ def hash_message(nonce, message, q):
     else:
         raise ValueError("Unsupported message type. Must be str, int, or bytes.")
         
-    # Concatenate nonce and message bytes
-    combined = nonce_bytes + message_bytes
+    context_info = b"PoC_ECDSA_Schnorr_Signature"  # Context string to prevent cross-protocol attacks
     
-    # Hash the combined bytes using SHA-256
+    # Concatenate context, nonce, message length, and message bytes
+    # H(context || len(nonce) || nonce || len(message) || message || output_length)
+    combined = context_info + len(nonce_bytes).to_bytes(4, byteorder='big') + nonce_bytes + len(message_bytes).to_bytes(4, byteorder='big') + message_bytes + (16).to_bytes(4, byteorder='big')
+    
+    # Hash the combined bytes using SHAKE-256
     hash_digest = hashlib.shake_256(combined).digest(32)
 
     # Truncate the hash for 128-bit security
@@ -228,15 +231,17 @@ def tuple_hash(arg1, arg2, arg3, arg4):
     arg3_bytes = arg3.x().to_bytes(32, byteorder='big') + arg3.y().to_bytes(32, byteorder='big')  # h is 256 bits, so 64 bytes
     arg4_bytes = arg4.x().to_bytes(32, byteorder='big') + arg4.y().to_bytes(32, byteorder='big')  # u is 256 bits, so 64 bytes
 
-    # Create a TupleHash object
-    tuple_hash_obj = TupleHash.new(digest_bits=256)
+    context_info = b"PoC_ECDSA_NIZKP"  # Context string to prevent cross-protocol attacks
 
-    # Update the hash with the byte representations of the arguments
-    tuple_hash_obj.update(arg1_bytes)
-    tuple_hash_obj.update(arg2_bytes)
-    tuple_hash_obj.update(arg3_bytes)
-    tuple_hash_obj.update(arg4_bytes)
-
-    # Finalize and return the hash digest as an integer
-    hash_digest = tuple_hash_obj.digest()
-    return int.from_bytes(hash_digest, byteorder='big')
+    # Concatenate context, arguments, and their lengths
+    # H(context || len(arg1) || arg1 || || len(arg2) || arg2 || len(arg3) || arg3 || len(arg4) || arg4)
+    combined = (context_info + 
+                len(arg1_bytes).to_bytes(4, byteorder='big') + arg1_bytes +
+                len(arg2_bytes).to_bytes(4, byteorder='big') + arg2_bytes +
+                len(arg3_bytes).to_bytes(4, byteorder='big') + arg3_bytes +
+                len(arg4_bytes).to_bytes(4, byteorder='big') + arg4_bytes)
+    
+    hash_digest = hashlib.shake_256(combined).digest(32)
+    digest = int.from_bytes(hash_digest, byteorder='big')
+    digest = digest % arg2  # Reduce the hash modulo q
+    return digest
