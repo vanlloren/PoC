@@ -10,6 +10,7 @@ import ecdsa
 from ecdsa import NIST256p, ellipticcurve
 
 # Generates an elliptic curve with specified parameters
+# to change the curve, simply change its name with the one of a proven secure elliptic cruve
 def generate_elliptic_curve():
     curve = NIST256p  # secp256r1
     g = curve.generator     # generating point G (x, y) (the g of the DSA-like scheme)
