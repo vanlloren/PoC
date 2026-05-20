@@ -388,18 +388,18 @@ class User1(threading.Thread):
             self.keygen_5()
         if msg.description == "nizkp_proof" and msg.sender == 2:
             # Do actions
-            if curves_utils.is_infinity(msg.content[0]) or curves_utils.is_infinity(msg.content[3]) or curves_utils.is_infinity(msg.content[4]) or curves_utils.is_infinity(msg.content[7]):
+            if curves_utils.is_infinity(msg.content[0]) or curves_utils.is_infinity(msg.content[3]) or curves_utils.is_infinity(msg.content[5]) or curves_utils.is_infinity(msg.content[8]):
                 PoC_ECDSA.src.general_procedures.abort()
             # msg.content[0] o msg.content[3] o msg.content[4] o msg.content[7] not in the group G
-            elif not curves_utils.validate_point(msg.content[0]) or not curves_utils.validate_point(msg.content[3]) or not curves_utils.validate_point(msg.content[4]) or not curves_utils.validate_point(msg.content[7]):
+            elif not curves_utils.validate_point(msg.content[0]) or not curves_utils.validate_point(msg.content[3]) or not curves_utils.validate_point(msg.content[5]) or not curves_utils.validate_point(msg.content[8]):
                 PoC_ECDSA.src.general_procedures.abort()
             # check z1 and z2 != mod q
-            elif (msg.content[2] % self.q == 0) or (msg.content[6] % self.q == 0):
+            elif (msg.content[2] % self.q == 0) or (msg.content[7] % self.q == 0):
                 PoC_ECDSA.src.general_procedures.abort()
             else:
-                if msg.content[1] != PoC_ECDSA.src.crypto_utils.tuple_hash(self.g, self.q, msg.content[3], msg.content[0]) or msg.content[5] != PoC_ECDSA.src.crypto_utils.tuple_hash(self.g, self.q, msg.content[7], msg.content[4]):
+                if msg.content[1] != PoC_ECDSA.src.crypto_utils.tuple_hash(self.g, self.q, msg.content[3], msg.content[0], msg.content[4]) or msg.content[6] != PoC_ECDSA.src.crypto_utils.tuple_hash(self.g, self.q, msg.content[8], msg.content[5], msg.content[9]):
                     PoC_ECDSA.src.general_procedures.abort()
-                elif curves_utils.scalar_mult(msg.content[2], self.g) != curves_utils.point_add(msg.content[0], curves_utils.scalar_mult(msg.content[1], msg.content[3])) or curves_utils.scalar_mult(msg.content[6], self.g) != curves_utils.point_add(msg.content[4], curves_utils.scalar_mult(msg.content[5], msg.content[7])):
+                elif curves_utils.scalar_mult(msg.content[2], self.g) != curves_utils.point_add(msg.content[0], curves_utils.scalar_mult(msg.content[1], msg.content[3])) or curves_utils.scalar_mult(msg.content[7], self.g) != curves_utils.point_add(msg.content[5], curves_utils.scalar_mult(msg.content[6], msg.content[8])):
                     PoC_ECDSA.src.general_procedures.abort()
                 else:
                     self.keygen_5_part2()
@@ -489,15 +489,25 @@ class User1(threading.Thread):
         
         self.nizkp_u1 = curves_utils.scalar_mult(self.nizkp_nonce1, self.g)
         self.nizkp_h1 = curves_utils.scalar_mult(self.y_1_3, self.g)
-        self.nizkp_c1 = PoC_ECDSA.src.crypto_utils.tuple_hash(self.g, self.q, self.nizkp_h1, self.nizkp_u1)
+        counter1 = 1
+        while True:
+            self.nizkp_c1 = PoC_ECDSA.src.crypto_utils.tuple_hash(self.g, self.q, self.nizkp_h1, self.nizkp_u1, counter1)
+            if 0 < self.nizkp_c1 < self.q:
+                break
+            counter1 += 1
         self.nizkp_z1 = (self.nizkp_nonce1 + self.y_1_3 * self.nizkp_c1) % self.q
 
         self.nizkp_u2 = curves_utils.scalar_mult(self.nizkp_nonce2, self.g)
         self.nizkp_h2 = curves_utils.scalar_mult(self.y_3_1, self.g)
-        self.nizkp_c2 = PoC_ECDSA.src.crypto_utils.tuple_hash(self.g, self.q, self.nizkp_h2, self.nizkp_u2)
+        counter2 = 1
+        while True:
+            self.nizkp_c2 = PoC_ECDSA.src.crypto_utils.tuple_hash(self.g, self.q, self.nizkp_h2, self.nizkp_u2, counter2)
+            if 0 < self.nizkp_c2 < self.q:
+                break
+            counter2 += 1
         self.nizkp_z2 = (self.nizkp_nonce2 + self.y_3_1 * self.nizkp_c2) % self.q
 
-        self.queue2.put(PoC_ECDSA.src.utils.Message(description="nizkp_proof", sender=self.party_id, receiver=2, content=(self.nizkp_u1, self.nizkp_c1, self.nizkp_z1, self.nizkp_h1, self.nizkp_u2, self.nizkp_c2, self.nizkp_z2, self.nizkp_h2)))
+        self.queue2.put(PoC_ECDSA.src.utils.Message(description="nizkp_proof", sender=self.party_id, receiver=2, content=(self.nizkp_u1, self.nizkp_c1, self.nizkp_z1, self.nizkp_h1, counter1, self.nizkp_u2, self.nizkp_c2, self.nizkp_z2, self.nizkp_h2, counter2)))
 
     def keygen_5_part2(self):
         if curves_utils.scalar_mult(self.y_2_1, self.g) != curves_utils.point_add(self.A_2, curves_utils.scalar_mult(self.M_2, 1)):
@@ -782,18 +792,18 @@ class User2(threading.Thread):
             self.keygen_5()
         if msg.description == "nizkp_proof" and msg.sender == 1:
             # Do actions
-            if curves_utils.is_infinity(msg.content[0]) or curves_utils.is_infinity(msg.content[3]) or curves_utils.is_infinity(msg.content[4]) or curves_utils.is_infinity(msg.content[7]):
+            if curves_utils.is_infinity(msg.content[0]) or curves_utils.is_infinity(msg.content[3]) or curves_utils.is_infinity(msg.content[5]) or curves_utils.is_infinity(msg.content[8]):
                 PoC_ECDSA.src.general_procedures.abort()
             # msg.content[0] o msg.content[3] o msg.content[4] o msg.content[7] not in the group G
-            elif not curves_utils.validate_point(msg.content[0]) or not curves_utils.validate_point(msg.content[3]) or not curves_utils.validate_point(msg.content[4]) or not curves_utils.validate_point(msg.content[7]):
+            elif not curves_utils.validate_point(msg.content[0]) or not curves_utils.validate_point(msg.content[3]) or not curves_utils.validate_point(msg.content[5]) or not curves_utils.validate_point(msg.content[8]):
                 PoC_ECDSA.src.general_procedures.abort()
             # check z1 and z2 != mod q
-            elif msg.content[2] == 0 or msg.content[6] == 0:
+            elif msg.content[2] == 0 or msg.content[7] == 0:
                 PoC_ECDSA.src.general_procedures.abort()
             else:
-                if msg.content[1] != PoC_ECDSA.src.crypto_utils.tuple_hash(self.g, self.q, msg.content[3], msg.content[0]) or msg.content[5] != PoC_ECDSA.src.crypto_utils.tuple_hash(self.g, self.q, msg.content[7], msg.content[4]):
+                if msg.content[1] != PoC_ECDSA.src.crypto_utils.tuple_hash(self.g, self.q, msg.content[3], msg.content[0], msg.content[4]) or msg.content[6] != PoC_ECDSA.src.crypto_utils.tuple_hash(self.g, self.q, msg.content[8], msg.content[5], msg.content[9]):
                     PoC_ECDSA.src.general_procedures.abort()
-                elif curves_utils.scalar_mult(msg.content[2], self.g) != curves_utils.point_add(msg.content[0], curves_utils.scalar_mult(msg.content[1], msg.content[3])) or curves_utils.scalar_mult(msg.content[6], self.g) != curves_utils.point_add(msg.content[4], curves_utils.scalar_mult(msg.content[5], msg.content[7])):
+                elif curves_utils.scalar_mult(msg.content[2], self.g) != curves_utils.point_add(msg.content[0], curves_utils.scalar_mult(msg.content[1], msg.content[3])) or curves_utils.scalar_mult(msg.content[7], self.g) != curves_utils.point_add(msg.content[5], curves_utils.scalar_mult(msg.content[6], msg.content[8])):
                     PoC_ECDSA.src.general_procedures.abort()
                 else:
                     self.keygen_5_part2()
@@ -885,15 +895,25 @@ class User2(threading.Thread):
 
         self.nizkp_u1 = curves_utils.scalar_mult(self.nizkp_nonce1, self.g)
         self.nizkp_h1 = curves_utils.scalar_mult(self.y_2_3, self.g)
-        self.nizkp_c1 = PoC_ECDSA.src.crypto_utils.tuple_hash(self.g, self.q, self.nizkp_h1, self.nizkp_u1)
+        counter1 = 1
+        while True:
+            self.nizkp_c1 = PoC_ECDSA.src.crypto_utils.tuple_hash(self.g, self.q, self.nizkp_h1, self.nizkp_u1, counter1)
+            if 0 < self.nizkp_c1 < self.q:
+                break
+            counter1 += 1
         self.nizkp_z1 = (self.nizkp_nonce1 + self.y_2_3 * self.nizkp_c1) % self.q
 
         self.nizkp_u2 = curves_utils.scalar_mult(self.nizkp_nonce2, self.g)
         self.nizkp_h2 = curves_utils.scalar_mult(self.y_3_2, self.g)
-        self.nizkp_c2 = PoC_ECDSA.src.crypto_utils.tuple_hash(self.g, self.q, self.nizkp_h2, self.nizkp_u2)
+        counter2 = 1
+        while True:
+            self.nizkp_c2 = PoC_ECDSA.src.crypto_utils.tuple_hash(self.g, self.q, self.nizkp_h2, self.nizkp_u2, counter2)
+            if 0 < self.nizkp_c2 < self.q:
+                break
+            counter2 += 1
         self.nizkp_z2 = (self.nizkp_nonce2 + self.y_3_2 * self.nizkp_c2) % self.q
 
-        self.queue1.put(PoC_ECDSA.src.utils.Message(description="nizkp_proof", sender=self.party_id, receiver=1, content=(self.nizkp_u1, self.nizkp_c1, self.nizkp_z1, self.nizkp_h1, self.nizkp_u2, self.nizkp_c2, self.nizkp_z2, self.nizkp_h2)))
+        self.queue1.put(PoC_ECDSA.src.utils.Message(description="nizkp_proof", sender=self.party_id, receiver=1, content=(self.nizkp_u1, self.nizkp_c1, self.nizkp_z1, self.nizkp_h1, counter1, self.nizkp_u2, self.nizkp_c2, self.nizkp_z2, self.nizkp_h2, counter2)))
 
     def keygen_5_part2(self):
         if curves_utils.scalar_mult(self.y_1_2, self.g) != curves_utils.point_add(self.A_1, curves_utils.scalar_mult(self.M_1, 2)):

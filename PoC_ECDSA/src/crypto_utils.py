@@ -36,22 +36,27 @@ def hash_message(nonce, message, q):
         message_bytes = message
     else:
         raise ValueError("Unsupported message type. Must be str, int, or bytes.")
-        
-    context_info = b"PoC_ECDSA_Schnorr_Signature"  # Context string to prevent cross-protocol attacks
     
-    # Concatenate context, nonce, message length, and message bytes
-    # H(context || len(nonce) || nonce || len(message) || message || output_length)
-    combined = context_info + len(nonce_bytes).to_bytes(4, byteorder='big') + nonce_bytes + len(message_bytes).to_bytes(4, byteorder='big') + message_bytes + (16).to_bytes(4, byteorder='big')
+    context = 0x0301
+    context_info = context.to_bytes(2, byteorder='little')  # Context string to prevent cross-protocol attacks
+    counter = b'\x01' #single byte set to 1, to distinguish this hash from other hash contexts (e.g., commitments)
     
-    # Hash the combined bytes using SHAKE-256
-    hash_digest = hashlib.shake_256(combined).digest(32)
+    while True:
+        # Concatenate context, nonce, message length, and message bytes
+        # H(context || counter || len(nonce) || nonce || len(message) || message || output_length)
+        combined = context_info + counter + len(nonce_bytes).to_bytes(8, byteorder='little') + nonce_bytes + len(message_bytes).to_bytes(8, byteorder='little') + message_bytes + (32).to_bytes(8, byteorder='little')
+        # Hash the combined bytes using SHAKE-256
+        hash_digest = hashlib.shake_256(combined).digest(32)
+
+        counter = (counter[0] + 1) 
+        if hash_digest != b'\x00' * 32:  # Ensure the hash is not all zeros, which could be a weak value
+            break
 
     # Truncate the hash for 128-bit security
     truncated_hash = hash_digest[:16] 
 
     # Convert the truncated hash to an integer
     hash_int = int.from_bytes(truncated_hash, byteorder='big')
-    hash_int = hash_int % q
     return hash_int
 
 # Generates an RSA key pair for the recovery party
@@ -119,10 +124,14 @@ def commit_single_point(point, q):
     x_bytes = x.to_bytes(32, byteorder='big') # 256 bits = 32 bytes
     y_bytes = y.to_bytes(32, byteorder='big') # 256 bits = 32 bytes
     
-    context_info = b"PoC_ECDSA_r_i_Commitment"
+    context = 0x0103
+    context_info = context.to_bytes(2, byteorder='little')  # Context string to prevent cross-protocol attacks
 
-    # H(context || len(nonce) || nonce || len(pointx) || pointx || len(pointy) || pointy || output_length)
-    hash_input = context_info + len(nonce_bytes).to_bytes(4, byteorder='big') + nonce_bytes + len(x_bytes).to_bytes(4, byteorder='big') + x_bytes + len(y_bytes).to_bytes(4, byteorder='big') + y_bytes + (32).to_bytes(4, byteorder='big')
+    #single byte set to 1
+    counter = b'\x01'
+
+    # H(context || counter || len(nonce) || nonce || len(pointx) || pointx || len(pointy) || pointy || output_length)
+    hash_input = context_info + counter + len(nonce_bytes).to_bytes(4, byteorder='little') + nonce_bytes + len(x_bytes).to_bytes(4, byteorder='little') + x_bytes + len(y_bytes).to_bytes(4, byteorder='little') + y_bytes + (32).to_bytes(4, byteorder='little')
     commitment = hashlib.shake_256(hash_input).digest(32)
 
     return commitment, (x, y, nonce)
@@ -146,13 +155,15 @@ def commit_couple_point(point1, point2, q):
     x2_bytes = x2.to_bytes(32, byteorder='big') # 256 bits = 32 bytes
     y2_bytes = y2.to_bytes(32, byteorder='big') # 256 bits = 32 bytes
 
-    context_info = b"PoC_ECDSA_A_i_Y_3_i_Commitment"
+    context = 0x0003    
+    context_info = context.to_bytes(2, byteorder='little')
+    counter = b'\x01' #single byte set to 1
 
-    # H(context || len(nonce) || nonce || len(point1x) || point1x || len(point1y) || point1y || len(point2x) || point2x || len(point2y) || point2y || output_length)
-    hash_input = (context_info + len(nonce_bytes).to_bytes(4, byteorder='big') + nonce_bytes +
-                len(x1_bytes).to_bytes(4, byteorder='big') + x1_bytes + len(y1_bytes).to_bytes(4, byteorder='big') + y1_bytes +
-                len(x2_bytes).to_bytes(4, byteorder='big') + x2_bytes + len(y2_bytes).to_bytes(4, byteorder='big') + y2_bytes +
-                (32).to_bytes(4, byteorder='big'))    
+    # H(context || counter || len(nonce) || nonce || len(point1x) || point1x || len(point1y) || point1y || len(point2x) || point2x || len(point2y) || point2y || output_length)
+    hash_input = (context_info + counter + len(nonce_bytes).to_bytes(4, byteorder='little') + nonce_bytes +
+                len(x1_bytes).to_bytes(4, byteorder='little') + x1_bytes + len(y1_bytes).to_bytes(4, byteorder='little') + y1_bytes +
+                len(x2_bytes).to_bytes(4, byteorder='little') + x2_bytes + len(y2_bytes).to_bytes(4, byteorder='little') + y2_bytes +
+                (32).to_bytes(4, byteorder='little'))    
     commitment = hashlib.shake_256(hash_input).digest(32)    
 
     return commitment, (x1, y1, x2, y2, nonce)
@@ -161,25 +172,29 @@ def commit_couple_point(point1, point2, q):
 def verify_commitment_point(commitment, decommitment):
     if len(decommitment) == 3:
         point_x, point_y, nonce = decommitment
-        context_info = b"PoC_ECDSA_r_i_Commitment"
-        # H(context || len(nonce) || nonce || len(pointx) || pointx || len(pointy) || pointy || output_length)
+        context = 0x0103
+        context_info = context.to_bytes(2, byteorder='little')
+        counter = b'\x01'
+        # H(context || counter || len(nonce) || nonce || len(pointx) || pointx || len(pointy) || pointy || output_length)
         x_bytes = point_x.to_bytes(32, byteorder='big') # 256 bits = 32 bytes
         y_bytes = point_y.to_bytes(32, byteorder='big') # 256 bits = 32 bytes
         nonce_bytes = nonce.to_bytes(32, byteorder='big')
-        hash_input = context_info + len(nonce_bytes).to_bytes(4, byteorder='big') + nonce_bytes + len(x_bytes).to_bytes(4, byteorder='big') + x_bytes + len(y_bytes).to_bytes(4, byteorder='big') + y_bytes + (32).to_bytes(4, byteorder='big')
+        hash_input = context_info + counter + len(nonce_bytes).to_bytes(4, byteorder='little') + nonce_bytes + len(x_bytes).to_bytes(4, byteorder='little') + x_bytes + len(y_bytes).to_bytes(4, byteorder='little') + y_bytes + (32).to_bytes(4, byteorder='little')
     elif len(decommitment) == 5:
         x1, y1, x2, y2, nonce = decommitment
-        context_info = b"PoC_ECDSA_A_i_Y_3_i_Commitment"
-        # H(context || len(nonce) || nonce || len(point1x) || point1x || len(point1y) || point1y || len(point2x) || point2x || len(point2y) || point2y || output_length)   
+        context = 0x0003
+        context_info = context.to_bytes(2, byteorder='little')
+        counter = b'\x01'
+        # H(context || counter || len(nonce) || nonce || len(point1x) || point1x || len(point1y) || point1y || len(point2x) || point2x || len(point2y) || point2y || output_length)   
         x1_bytes = x1.to_bytes(32, byteorder='big') # 256 bits = 32 bytes
         y1_bytes = y1.to_bytes(32, byteorder='big') # 256 bits = 32 bytes
         x2_bytes = x2.to_bytes(32, byteorder='big') # 256 bits = 32 bytes
         y2_bytes = y2.to_bytes(32, byteorder='big') # 256 bits = 32 bytes
         nonce_bytes = nonce.to_bytes(32, byteorder='big')
-        hash_input = (context_info + len(nonce_bytes).to_bytes(4, byteorder='big') + nonce_bytes +
-                len(x1_bytes).to_bytes(4, byteorder='big') + x1_bytes + len(y1_bytes).to_bytes(4, byteorder='big') + y1_bytes +
-                len(x2_bytes).to_bytes(4, byteorder='big') + x2_bytes + len(y2_bytes).to_bytes(4, byteorder='big') + y2_bytes +
-                (32).to_bytes(4, byteorder='big'))
+        hash_input = (context_info + counter + len(nonce_bytes).to_bytes(4, byteorder='little') + nonce_bytes +
+                len(x1_bytes).to_bytes(4, byteorder='little') + x1_bytes + len(y1_bytes).to_bytes(4, byteorder='little') + y1_bytes +
+                len(x2_bytes).to_bytes(4, byteorder='little') + x2_bytes + len(y2_bytes).to_bytes(4, byteorder='little') + y2_bytes +
+                (32).to_bytes(4, byteorder='little'))
     else:
         raise ValueError("Invalid decommitment format")
 
@@ -196,18 +211,21 @@ def commit_single(context, value1, q):
     # Select a random nonce for the commitment
     nonce = secrets.randbelow(q)  # random nonce in the range 0 to q-1
     nonce_bytes = nonce.to_bytes(32, byteorder='big') # Convert the nonce to 256bits
+    counter = b'\x01' #single byte set to 1
 
     if context == "s_i":
-        context_info = b"PoC_DSA_s_i_Commitment"
+        context = 0x0202
+        context_info = context.to_bytes(2, byteorder='little')  # Context string to prevent cross-protocol attacks
         # Convert the value in 32 bytes (256 bits)
         value_bytes = value1.to_bytes(32, byteorder='big')
     elif context == "r_i":
-        context_info = b"PoC_DSA_r_i_Commitment"
+        context = 0x0202
+        context_info = context.to_bytes(2, byteorder='little')  # Context string to prevent cross-protocol attacks
         # Convert the value in 384 bytes (3072 bits)
         value_bytes = value1.to_bytes(384, byteorder='big')
 
-    # H(context || len(nonce) || nonce || len(value) || value || output_length)
-    hash_input = (context_info + len(nonce_bytes).to_bytes(4, byteorder='big') + nonce_bytes + len(value_bytes).to_bytes(4, byteorder='big') + value_bytes + (32).to_bytes(4, byteorder='big'))
+    # H(context || counter || len(nonce) || nonce || len(value) || value || output_length)
+    hash_input = (context_info + counter + len(nonce_bytes).to_bytes(4, byteorder='little') + nonce_bytes + len(value_bytes).to_bytes(4, byteorder='little') + value_bytes + (32).to_bytes(4, byteorder='little'))
     commitment = hashlib.shake_256(hash_input).digest(32)    
 
     return commitment, (value1, nonce)
@@ -219,14 +237,17 @@ def verify_commitment(context, commitment, decommitment):
         nonce_bytes = nonce.to_bytes(32, byteorder='big')
 
         if context == "s_i":
-            context_info = b"PoC_DSA_s_i_Commitment"
+            context = 0x0202
+            context_info = context.to_bytes(2, byteorder='little')  # Context string to prevent cross-protocol attacks
             value_bytes = value1.to_bytes(32, byteorder='big')
         elif context == "r_i":
-            context_info = b"PoC_DSA_r_i_Commitment"
+            context = 0x0202
+            context_info = context.to_bytes(2, byteorder='little')  # Context string to prevent cross-protocol attacks
             value_bytes = value1.to_bytes(384, byteorder='big')
 
-        # H(context || len(nonce) || nonce || len(value) || value || output_length)
-        hash_input = (context_info + len(nonce_bytes).to_bytes(4, byteorder='big') + nonce_bytes + len(value_bytes).to_bytes(4, byteorder='big') + value_bytes + (32).to_bytes(4, byteorder='big'))
+        counter = b'\x01' #single byte set to 1
+        # H(context || counter || len(nonce) || nonce || len(value) || value || output_length)
+        hash_input = (context_info + counter + len(nonce_bytes).to_bytes(4, byteorder='little') + nonce_bytes + len(value_bytes).to_bytes(4, byteorder='little') + value_bytes + (32).to_bytes(4, byteorder='little'))
     else:
         raise ValueError("Invalid decommitment format")
 
@@ -239,24 +260,25 @@ def verify_commitment(context, commitment, decommitment):
         
 # Used to compute the hash of the quartet g, q, h, u 
 # where arg1, arg3 and arg4 are points of the curve and arg2 is the curve order n
-def tuple_hash(arg1, arg2, arg3, arg4):
+def tuple_hash(arg1, arg2, arg3, arg4, counter):
     # Convert arguments to bytes
     arg1_bytes = arg1.x().to_bytes(32, byteorder='big') + arg1.y().to_bytes(32, byteorder='big')  # g is 256 bits, so 64 bytes
     arg2_bytes = arg2.to_bytes(32, byteorder='big')   # q is 256 bits, so 32 bytes
     arg3_bytes = arg3.x().to_bytes(32, byteorder='big') + arg3.y().to_bytes(32, byteorder='big')  # h is 256 bits, so 64 bytes
     arg4_bytes = arg4.x().to_bytes(32, byteorder='big') + arg4.y().to_bytes(32, byteorder='big')  # u is 256 bits, so 64 bytes
 
-    context_info = b"PoC_ECDSA_NIZKP"  # Context string to prevent cross-protocol attacks
+    counter = counter.to_bytes(1, byteorder='big') # single byte counter to distinguish different hash contexts (e.g., 0x01 for the first hash, 0x02 for the second, etc.)
+    context = 0x0012
+    context_info = context.to_bytes(2, byteorder='little')  # Context string to prevent cross-protocol attacks
 
     # Concatenate context, arguments, and their lengths
-    # H(context || len(arg1) || arg1 || || len(arg2) || arg2 || len(arg3) || arg3 || len(arg4) || arg4)
-    combined = (context_info + 
-                len(arg1_bytes).to_bytes(4, byteorder='big') + arg1_bytes +
-                len(arg2_bytes).to_bytes(4, byteorder='big') + arg2_bytes +
-                len(arg3_bytes).to_bytes(4, byteorder='big') + arg3_bytes +
-                len(arg4_bytes).to_bytes(4, byteorder='big') + arg4_bytes)
+    # H(context || counter || len(arg1) || arg1 || || len(arg2) || arg2 || len(arg3) || arg3 || len(arg4) || arg4)
+    combined = (context_info + counter +
+                len(arg1_bytes).to_bytes(4, byteorder='little') + arg1_bytes +
+                len(arg2_bytes).to_bytes(4, byteorder='little') + arg2_bytes +
+                len(arg3_bytes).to_bytes(4, byteorder='little') + arg3_bytes +
+                len(arg4_bytes).to_bytes(4, byteorder='little') + arg4_bytes)
     
     hash_digest = hashlib.shake_256(combined).digest(32)
     digest = int.from_bytes(hash_digest, byteorder='big')
-    digest = digest % arg2  # Reduce the hash modulo q
     return digest

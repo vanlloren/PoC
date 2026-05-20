@@ -29,6 +29,9 @@ def initialize_protocol():
     # Generate elliptic curve parameters for the protocol
     G, p, n, name = PoC_ECDSA.src.crypto_utils.generate_elliptic_curve()
 
+    # Show the curve parameters in hexadecimal format
+    print(f"Curve parameters: G = {G}, p = {p:x}, n = {n:x}, name = {name}")
+
     # Set the curve parameters for all the parties
     recovery_party.set_curve_parameters(G, p, n)
     user1.set_curve_parameters(G, p, n)
